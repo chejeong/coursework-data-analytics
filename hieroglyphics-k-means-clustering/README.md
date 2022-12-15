@@ -8,7 +8,7 @@ This project uses K-Means-Clustering to cluster similar hieroglyphics characters
 
 ### Data
 
-The data set contains 4,411 hieroglyphs found in 10 different pictures derived from the book “The Pyramid of Unas” (Alexandre Piankoff, 1955). The dataset is compiled by Morris Franken, complementary to the paper titled “Automatic Egyptian Hieroglyph Recognition by Retrieving Images as Texts” (ACM Conference on Multimedia, 2013). The images were processed in a way such that it fits a 50x75 pixel dimension. Only a few of the 4,411 hieroglyphs were uploaded to this repository to provide examples, while not exceeding the 100mb upload limit.
+The data set contains 4,411 hieroglyphs found in 10 different pictures derived from the book “The Pyramid of Unas” (Alexandre Piankoff, 1955). The dataset is compiled by Morris Franken, complementary to the paper titled “Automatic Egyptian Hieroglyph Recognition by Retrieving Images as Texts” (ACM Conference on Multimedia, 2013). The images were processed in a way such that it fits a 50x75 pixel dimension. Please refer to the `clusters` folder for sample images of the dataset. 
 
 ### Analysis
 
@@ -42,8 +42,12 @@ New images could be assigned to the clusters by calculating the euclidean distan
 
 |File|Description|
 |----|-----------|
-|||
-|| |
-| | |
+|hieroglyphics.R|R file of project code|
+|hieroglyphics.Rmd|R Markdown file of project code |
+|clusters|Clusters formed by running K-Means-Clustering model|
+|README_Images|Images used to embed in README file|
 
 
+### Acknowledgements
+
+This lab was designed by Dr. Bonifonte of Denison University who has provided the necessary materials and data.
