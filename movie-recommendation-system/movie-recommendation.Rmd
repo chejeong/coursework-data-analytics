@@ -1,0 +1,494 @@
+---
+title: "Lab4Che"
+author: "Che Hoon Jeong"
+date: "2/14/2022"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+install.packages("caret", repos = "http://cran.us.r-project.org")
+install.packages("dplyr", repos = "http://cran.us.r-project.org")
+
+library("caret")
+library("dplyr")
+
+```
+
+
+
+### Question 1
+
+We read in the ratings and MovieGenome datasets.
+```{r, warning=FALSE, error=FALSE}
+ratings <- read.csv("Data/ratings.csv")
+genome <- read.csv("Data/MovieGenome.csv")
+
+```
+
+
+### Question 2
+
+We perform a PCA on the MovieGenome data. We find the number of principal components that capture 90% of the variance in the data.
+
+```{r, warning=FALSE, error=FALSE}
+
+genome.pca <- prcomp(genome[,2:1129], scale.=TRUE)
+
+```
+
+```{r, warning=FALSE, error=FALSE}
+
+##Plotting proportion of variance
+pca_var = genome.pca$sdev^2
+prop_varex <- pca_var/sum(pca_var) #Proportion of variance
+plot(cumsum(prop_varex),type='b', main = "Cumulative Proportion of Variance") #Cumulative proportion of variance
+
+```
+
+Roughly 450 principal components explain 90% of the variance.
+
+
+### Question 3.
+My favorite movie from 2015 or earlier is Memento (2000), id: 4226.
+We construct data frame of distances from my favorite movie to every other movie.
+
+```{r, eval=FALSE, warning=FALSE, error=FALSE}
+
+numRows <- nrow(genome.pca$x)
+
+distanceDf <- data.frame(movieId = integer(numRows), distance = numeric(numRows))
+
+favMovIndex <- which(genome$movieId==4226)
+
+distanceList <- numeric(numRows)
+
+for (i in 1:numRows) {
+
+  if(i != favMovIndex){
+    distanceList[i]<- sqrt(sum((genome.pca$x[favMovIndex,1:450]-genome.pca$x[i,1:450])^2))
+  }
+
+  if(i%%100 == 0){
+    print(paste("Current movieId: ", i, sep = ""))
+  }
+
+}
+
+
+```
+
+```{r, eval=FALSE, warning=FALSE, error=FALSE}
+
+distanceDf$distance <- distanceList
+distanceDf$movieId <- genome$movieId
+write.csv(distanceDf, "/Users/CheHoon/Desktop/SP2022/DA350/Lab4/moviedistance.csv")
+
+
+```
+
+```{r, warning=FALSE, error=FALSE}
+distanceDf <- read.csv("/Users/CheHoon/Desktop/SP2022/DA350/Lab4/moviedistance.csv")
+```
+
+
+```{r, warning=FALSE, error=FALSE}
+
+distanceDf[order(distanceDf$distance),][2:4,]
+
+```
+
+```{r, warning=FALSE, error=FALSE}
+distanceDf[order(-distanceDf$distance),][1:3,]
+```
+
+
+Excluding first row which is my favorite movie itself, the three closest movies are: Following (1998), Inception(2010), and Usual Suspects, The (1995).
+
+The results makes sense, because Following and Inception are directed by Christopher Nolan, who also directed my favorite movie, Memento. Usual Suspects is a mystery thriller, and Memento is also a mystery thriller film. 
+
+The three farthest movies are: Harry Potter and the Sorcerer's Stone (2001), Harry Potter and the Chamber of Secrets (2002), and Harry Potter and the Goblet of Fire (2005)
+
+These makes sense because Memento is very different from a fantasy movie like the Harry Potter series.
+
+### Question 4
+
+We reduce the size of the data even more by only including ratings of users that have rated my favorite movie.
+
+```{r, eval=FALSE, warning=FALSE, error=FALSE}
+ 
+ratings2 <- ratings %>% group_by(userId) %>% filter(4226 %in% movieId)
+write.csv(ratings2,"/Users/CheHoon/Desktop/SP2022/DA350/Lab4/ratings2.csv")
+
+```
+
+```{r}
+
+ratings2 <- read.csv("/Users/CheHoon/Desktop/SP2022/DA350/Lab4/ratings2.csv")
+
+```
+
+### Question 5
+
+We compare the performance on two benchmarks: global average, and each user's average.
+
+```{r, warning=FALSE, error=FALSE}
+ 
+print(paste("The global average rating is: ", mean(ratings2$rating), sep=""))
+
+userMeanRating <- ratings2 %>% group_by(userId) %>% summarise(meanRating = mean(rating))
+print(paste("The user average rating is: ", mean(userMeanRating$meanRating), sep=""))
+
+```
+
+The global average rating is: 3.46754708781403
+
+The user average rating is: 3.58699357803132
+
+### Question 6 & 7
+
+We merge the ratings and distanceDf for convenience in code below.
+
+```{r, warning=FALSE, error=FALSE}
+
+combined <- merge(ratings2, distanceDf, by="movieId")
+combined <- combined %>% group_by(userId) %>% arrange(userId, distance)
+combined <- combined %>% filter(distance != 0)
+
+```
+
+We find the k nearest rating by using: sapply(1:50, function(x) (sum(userRating$rating[1:x])/x)).
+
+```{r, eval=FALSE, error=FALSE, warning=FALSE}
+
+numUsers <- length(unique(combined$userId))
+userList <- unique(combined$userId)
+
+predictedDf <- data.frame(matrix(nrow=50, ncol=0))
+
+#loop through users
+for (i in 1:numUsers) {
+  
+  userRating <- combined %>% filter(userId == userList[i])
+  kPredictions <- sapply(1:50, function(x) (sum(userRating$rating[1:x])/x))
+  predictedDf[toString(userList[i])] <- kPredictions
+  
+}
+
+
+```
+
+```{r, eval=FALSE, error=FALSE, warning=FALSE}
+
+write.csv(predictedDf,"/Users/CheHoon/Desktop/SP2022/DA350/Lab4/kpredictions.csv")
+
+```
+
+```{r, error=FALSE, warning=FALSE}
+
+predictedDf <- read.csv("/Users/CheHoon/Desktop/SP2022/DA350/Lab4/kpredictions.csv")
+
+```
+
+
+### Question 8
+Make a graph with the x-axis as k, the y-axis as MSE, and three lines: one for each of the benchmarks from #5 (will be a constant across k) and one for the knn.
+
+```{r, error=FALSE, warning=FALSE}
+
+numUsers <- length(unique(combined$userId))
+transposed = t(predictedDf)
+
+actual <- as.data.frame(ratings2[which(ratings2$movieId == 4226),3])
+actual <- actual$rating
+
+mse <- numeric(50)
+
+for (i in 1:50) {
+  estimate <- as.numeric(as.vector(transposed[,i]))
+  mse[i] <- sum((actual - estimate)^2)/numUsers
+}
+
+
+```
+
+
+
+```{r, error=FALSE, warning=FALSE}
+
+globalAvg <- mean(ratings2$rating)
+userAvg <- userMeanRating$meanRating
+
+globalMSE <- sum((actual - globalAvg)^2)/numUsers
+userMSE <- mean((actual-userAvg)^2)
+
+globalMSE <- rep(globalMSE, times=50)
+userMSE <- rep(userMSE, times=50)
+
+
+plot(1:50, mse,type="b", xlab="K", ylab = "MSE", ylim=c(0.5,1.1))
+points(1:50, globalMSE, col="red", pch="*")
+lines(1:50, globalMSE, col="red",lty=2)
+points(1:50, userMSE, col="blue", pch="*")
+lines(1:50, userMSE, col="blue",lty=2)
+
+
+```
+
+What choice of parameters is best? How good are your predictions? Comment on what the exact value of MSE means in the context of the recommendation problem.
+
+Roughly 8 closest movies are best at making predictions. The predictions of the knn model is performing fairly well, with MSE reaching roughly 0.5 at the lowest point. It is also performing better than the global and user average. The MSE means that the squared difference between the true rating and predicted rating is roughly 0.5
+
+
+### Question 9
+
+We can loop through the movies and create a distance matrix such that we know the distance between each movies in the dataset. Using this, we can apply the k-nearest-neighbors model and use the 8 closest movies the user has watched to each movie, and predict the ratings. We can then sort the ratings in descending order to obtain the top movies that are expected to receive the highest ratings for the individual, and recommend them. Creating a distance matrix will be computationally expensive, therefore, it should be saved and maintained. Once it is calculated, sorting the movies based on distance and averaging the closest 8 movies is relatively feasible (because we can just index the matrix to get the distances). 
+
+
+# Part II
+
+We import that train and test data sets.
+```{r, warning=FALSE, error=FALSE, eval=FALSE}
+
+setwd("/Users/CheHoon/Desktop/SP2022/DA350/Lab5")
+
+train <- read.csv("Data/train_movies.csv")
+test <- read.csv("Data/test_movies.csv")
+
+trainUserId <- train$userId
+testUserId <- test$userId
+trainData <- train[,2:1320]
+testData <- test[,2:1320]
+
+```
+
+
+### Question 1
+
+We convert the training and test sets into binary data: (1) if user has seen that movie, (0) otherwise.
+
+```{r, warning=FALSE, error=FALSE, eval=FALSE}
+
+trainData[!is.na(trainData)] = 1
+trainData[is.na(trainData)] = 0
+testData[!is.na(testData)] = 1
+testData[is.na(testData)] = 0
+
+trainDataCopy <- trainData
+testDataCopy <- testData
+trainDataCopy$mId1197 <- as.factor(trainDataCopy$mId1197)
+testDataCopy$mId1197 <- as.factor(testDataCopy$mId1197)
+
+```
+
+
+### Question 2
+
+We perform k-nearest-neighbors with a fixed k predicting movie Id 1197. We record the time.
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+trctrl = trainControl(method = "repeatedcv", number = 5, repeats = 1)
+
+start <- Sys.time()
+
+#Regression kNN
+#k=10
+fixedKFit = train(mId1197 ~ ., 
+                           data = trainDataCopy, 
+                           method = "knn",
+                           trControl=trctrl,
+                           tuneGrid=expand.grid(k=5))
+
+end <- Sys.time()
+
+print(end-start)
+
+```
+
+The process took 8.364187 minutes. When we test for a wide range of k, then the run time will increase. As k increases, there will be more comparisons to make, so the process will take longer for each k. 
+
+
+### Question 2 - part2
+
+We use tuneLength = 15, to try wide range of values for k 
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+trainDataCopy$mId1197 <- as.factor(trainDataCopy$mId1197)
+
+```
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+start3 <- Sys.time()
+
+#Let caret search for best k
+trctrl = trainControl(method = "repeatedcv", number = 5, repeats = 1)
+
+bestfit2 = train(mId1197 ~ ., #Regression formula
+                            data = trainDataCopy,#Input training data  
+                            method = "knn", #Use knn method
+                            trControl=trctrl, # cross validation parameters specified above
+                            tuneLength = 15) #Search over 50 values of k
+
+end3 <- Sys.time()
+print(end3 - start3)
+
+```
+
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+plot(bestfit2)
+
+```
+
+The model with the best prediction is when k is 7.
+
+
+### Question 3
+
+We use the predict function to generate predictions of 1 and 0s 
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+bfp <- predict(bestfit2, newdata = trainData)
+
+```
+
+We construct a confusion matrix
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+confusionMatrix(bfp, trainDataCopy$mId1197)
+
+```
+
+Report and explain the meaning of the accuracy, kappa, sensitivity, and specificity measures. Are you satisfied with the performance of this model in the context of what you are trying to achieve?
+
+The accuracy is 0.8247. It means that 82.47% of the predictions are correct (true positive, true negative).
+
+The kappa is 0.383. It means that our model's accuracy is moderately better than if it was guessing by random chance.
+
+The sensitivity is 0.9878. It means that given a customer rents the movie, the model predicts the customer will rent it for 98.78% of the cases (predicts true positive correctly).
+
+The specificity is 0.3100. It means that given a customer does not rent the movie, the model predicts the customer would not rent it 31% of the cases (predicts true negative correctly).
+
+In the context of our problem, it is good that we have a high sensitivy because we are able to generate profit from each targeted audience. However, if we have a low specificity, it means that we are wasting budget on advertisement. Thus, it may be worth exploring if there are ways to reduce the specificity, while maintaining this level of sensitivity.
+
+
+### Question 4
+
+
+We extract the probabilities that each training user will watch TPB.
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+probfit <- predict(bestfit2, newdata = trainDataCopy, type = "prob")
+
+```
+
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+watch_probability = probfit[,2]
+
+cutoff = seq(min(watch_probability),max(watch_probability),.001)
+cutoff <- cutoff[1:1000]
+performance = setNames(data.frame(matrix(ncol = 8, nrow = length(cutoff))), c("Cutoff","TN", "FN", "TP", "FP", "Sensitivity", "Specificity","Accuracy"))
+performance$Cutoff = cutoff
+
+```
+
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+for (i in 1:length(cutoff)){
+  temp = table(watch_probability > performance$Cutoff[i], trainDataCopy$mId1197)
+  TN = temp[1,1]
+  FN = temp[1,2]
+  FP = temp[2,1]
+  TP = temp[2,2]
+  performance$TN[i] = TN
+  performance$TP[i] = TP
+  performance$FN[i] = FN
+  performance$FP[i] = FP
+  performance$Sensitivity[i] = TP/(FN+TP)
+  performance$Specificity[i] = TN/(TN+FP)
+  performance$Accuracy[i] = (TP+TN)/(FP+FN+TP+TN)
+}
+
+```
+
+
+### Question 5
+
+We create a loss function to calculate which cutoff returns greatest profit.
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+LossFP = 0.2
+LossFN = 0.5
+performance$Loss = performance$FP*LossFP + performance$FN*LossFN
+
+ggplot(performance,aes(Cutoff,Loss))+
+  geom_line()
+
+performance[which.min(performance$Loss),] #Best cutoff
+
+```
+
+We determine that the cutoff that minimizes loss is 0.158
+
+
+### Question 6
+
+We fit the testing data to our model below.
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+
+testfit <- predict(bestfit2, newdata = testDataCopy, type = "prob")
+
+```
+
+```{r, warning=FALSE, error = FALSE, eval=FALSE}
+test_probability <- testfit[,2]
+testtemp = table(test_probability > 0.158, testDataCopy$mId1197)
+testtemp
+```
+
+a. How many users will rent the movie using your decisions?
+
+430 people will rent the movie
+
+b. what profit would we expect to make? How would this compare to a baseline where we sent ads to every user?
+
+TP: 430 * 0.3 (0.5 rent profit - 0.2 ad cost) = 129
+FP: 377 * -0.2 = 75.4
+
+Total Profit: $53.6 (129 - 75.4)
+
+c. How much money would be wasted on advertisements that don't encourage a user to rent the movie?
+
+FP: 377 * 0.2 = $75.4 would be wasted
+
+d. How many users do we potentially miss that would have rented if we had advertised to them?
+
+We would miss 252 users. Thus, we will lose: 252 * 0.3 (0.5 rent profit - 0.2 ad cost) = $75.6
+
+
+
+
+
+
