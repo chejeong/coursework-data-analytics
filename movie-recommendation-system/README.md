@@ -19,10 +19,20 @@ It compares the movie of interest to similar movies the user has rated to genera
 |test_movies.csv||
 
 Note) `ratings.csv` originally contains 15,724,428 rows. But dataset uploaded to this repository only contains 100 rows just to display as sample.
+Data source: MovieLens, a movie recommendation service.
 
 
 ### Part 1
 
+The high level approach of the code for part 1 is as follows:
+
+- Conduct principal component analysis to determine how many principal components captures 95% of the variance. Was roughly 450.
+- Generate dataframe that presents distance between movie of interest and every other movie.
+- Reduce size of data by only including ratings of users that have rated movie of interest.
+- Find optimal value of *k* for k-nearest-neighbors algorithm. Compare to user average and global average. Figure presented below.
+
+
+<img src="README_Images/knnplot.png" width = 600>
 
 ### Part 2
 
