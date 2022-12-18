@@ -1,0 +1,347 @@
+---
+title: "Lab6Che"
+author: "Che Hoon Jeong"
+date: "2/25/2022"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+install.packages(c("dplyr", "caret", "stringr"))
+library("dplyr")
+library("caret")
+library("stringr")
+```
+
+We read in the datasets below.
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+setwd("/Users/CheHoon/Desktop/SP2022/DA350/Lab6")
+features <- read.csv("features.csv")
+genres <- read.csv("genres.csv")
+tracks <- read.csv("tracks.csv")
+
+```
+
+
+We extract just the track_id and genre_id from the tracks dataframe
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+tracksDf <- tracks %>% select(track_id, track_genres_all)
+
+```
+
+
+We find the list of genre ids that fall into the broader ids of hip-hop, pop, rock, and electronic, respectively.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+
+hiphopIndex <- which(genres$top_level == 21)
+popIndex <- which(genres$top_level == 10)
+rockIndex <- which(genres$top_level == 12)
+elecIndex <- which(genres$top_level == 15)
+
+hiphopGenreIds <- genres[hiphopIndex, "genre_id"]
+popGenreIds <- genres[popIndex, "genre_id"]
+rockGenreIds <- genres[rockIndex, "genre_id"]
+elecGenreIds <- genres[elecIndex, "genre_id"]
+
+```
+
+We preprocess the genre column by removing the brackets and empty spaces. We split by the commas and save the list of genre ids into the genres column.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+tracksDfCopy <- tracksDf
+
+tracksDfCopy$track_genres_all <- gsub("\\[|\\]",'',tracksDfCopy$track_genres_all)
+tracksDfCopy$track_genres_all <- gsub("[[:blank:]]",'',tracksDfCopy$track_genres_all)
+tracksDfCopy$track_genres_all <- strsplit(tracksDfCopy$track_genres_all, split=",")
+```
+
+We map the genre id to its parent ids (hiphop, electronic, pop, rock). If the genre id is not part of the four, it is stored as 0.
+```{r, eval=FALSE, warning = FALSE, error = FALSE}
+
+otherFlag <- FALSE
+
+for(i in 1:nrow(tracksDfCopy)){
+  
+  aRow = tracksDfCopy[i,"track_genres_all"]
+  
+  if(aRow != "" && !is.na(aRow)){
+  
+    for(ids in aRow){
+    
+      for(id in ids){
+        if(id %in% popGenreIds){
+          tracksDfCopy[i,"track_genres_all"] <- 10
+          otherFlag = FALSE
+          break
+        }
+        else if(id %in% hiphopGenreIds){
+          tracksDfCopy[i,"track_genres_all"] <- 21
+          otherFlag = FALSE
+          break
+        }
+        else if(id %in% rockGenreIds){
+          tracksDfCopy[i,"track_genres_all"] <- 12
+          otherFlag = FALSE
+          break
+        }
+        else if(id %in% elecGenreIds){
+          tracksDfCopy[i,"track_genres_all"] <- 15
+          otherFlag = FALSE
+          break
+        }
+        else{
+          otherFlag = TRUE
+        }
+      }
+      if(otherFlag){
+        tracksDfCopy[i,"track_genres_all"] <- 0
+      }
+  
+    }
+  }
+  
+}
+
+
+```
+
+We export the dataframe as a csv so that we do not have to run the above code again.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+tracksDfCopy$track_genres_all <- as.numeric(tracksDfCopy$track_genres_all)
+write.csv(tracksDfCopy, "/Users/CheHoon/Desktop/SP2022/DA350/Lab6/tracksDfCopy.csv")
+```
+
+We read in the preprocessed data.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+tracksDfCopy <- read.csv("/Users/CheHoon/Desktop/SP2022/DA350/Lab6/tracksDfCopy.csv")
+tracksDfCopy <- tracksDfCopy %>% select(track_id, track_genres_all)
+```
+
+We merge the genres and features dataframe by the track_id.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+combined <- merge(features, tracksDfCopy, by="track_id")
+```
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+combined %>% group_by(track_genres_all) %>% summarise(n())
+```
+We drop rows with NA values in the genres column, because the values in the other column appear to be inaccurate and corrupt as well. We also make the genre as a factor for classification purposes.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+combined <- combined[!is.na(combined$track_genres_all),]
+combined$track_genres_all <- as.factor(combined$track_genres_all)
+
+```
+
+
+We conduct a train-test-split below.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+set.seed(1)
+
+trainIndex <- createDataPartition(combined$track_genres_all, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+
+train <- combined[ trainIndex,2:520]
+test  <- combined[-trainIndex,2:520]
+
+
+```
+
+
+
+### Single Feature
+
+If we are limited to a single feature to decide the genre, we should attempt to identify one of the more significant feature out of all the variables. We construct a model with all the variables, and observe the importance of the variables below.
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+## Use LDA in predictive model
+
+#Fit with cross validation
+lda.fit = train(track_genres_all ~ ., 
+                data=train, 
+                method="lda",
+                trControl = trainControl(method = "cv"))
+
+# estimate variable importance
+importance <- varImp(lda.fit, scale=FALSE)
+#plot the importance
+plot(importance, top=10)
+
+
+```
+
+The plot above depicts that mfcc_median_1 is the most important for all the genres except for rock. Thus, if we were to use a single variable, using mfcc_median_1 may result in a more accurate model.
+
+We use mfcc_median_1 as the only feature in the model that predicts the genre.
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+## Use LDA in predictive model
+
+#Fit with cross validation
+lda.single = train(track_genres_all ~ mfcc_median_1, 
+                data=train, 
+                method="lda",
+                trControl = trainControl(method = "cv"))
+
+lda.single$finalModel$counts #Counts of each category
+lda.single$finalModel$prior #Prior probability of each category
+lda.single$finalModel$means #Means of each category
+
+
+lda.single$results #Returns training accuracy and Kappa of classification
+
+
+```
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+#Predict on test set
+single.predictions = predict(lda.single, newdata = test) #Return best predictions for category
+
+confusionMatrix(single.predictions,test$track_genres_all) #Confusion Matrix and accuracy
+
+```
+
+As observed by the confusion matrix above, the model with only one feature classifies the tracks into either 0 ("other genres") or 12 (rock). Therefore, the model performs very poorly since it fails to classify pop, electronic, and hiphop genres. The Kappa value is also very low, with a value of 0.1639, which means the model performs only slightly better than if it was randomly guessing. The accuracy may appear to be moderate with a value of 0.4, but this value may be deceptive because 6915 are correctly characterized as "other", and the model only predicts "other" and "rock".
+
+
+### Multiple Feature Model
+
+
+We find the correlation between the features, and find number of highly correlated ones.
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+# calculate correlation matrix
+correlationMatrix <- cor(train[,1:518])
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.75)
+
+print(length(highlyCorrelated))
+
+```
+
+We find that out of the 518 predictor variables 204 are highly correlated. Thus, when constructing our model, it may be beneficial to drop some variables instead of using all the features. Moreover, considering there are 518 predictors, it may be beneficial to reduce the dimensionality of the data. Using PCA may be especially beneficial in this case where we do not know the meaning of the columns. Thus, we perform PCA below.
+
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+combined2 <- combined[,2:519]
+combined.pca <- prcomp(combined2, scale. = TRUE)
+
+##Plotting proportion of variance
+pca_var = combined.pca$sdev^2
+prop_varex <- pca_var/sum(pca_var) #Proportion of variance
+plot(cumsum(prop_varex),type='b', main = "Cumulative Proportion of Variance") #Cumulative proportion of variance
+
+
+```
+
+Roughly 250 principal components explain 95% of the variability in the data. Thus we use the first 250 principal components to construct the model.
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+combined.pca.x <- combined.pca$x[,1:250]
+combined.pca.x <- as.data.frame(combined.pca.x)
+combined.pca.x$track_genres_all <- combined$track_genres_all
+
+```
+
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+set.seed(1)
+
+train.pca.index <- createDataPartition(combined.pca.x$track_genres_all, p = .7, 
+                                  list = FALSE, 
+                                  times = 1)
+
+train.pca <- combined.pca.x[train.pca.index,]
+test.pca  <- combined.pca.x[-train.pca.index,]
+
+```
+
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+## Use LDA in predictive model
+
+#Fit with cross validation
+lda.multiple = train(track_genres_all ~ ., 
+                data=train.pca, 
+                method="lda",
+                trControl = trainControl(method = "cv"))
+
+lda.multiple$finalModel$counts #Counts of each category
+lda.multiple$finalModel$prior #Prior probability of each category
+lda.multiple$finalModel$means #Means of each category
+
+
+lda.multiple$results #Returns training accuracy and Kappa of classification
+
+
+```
+
+```{r, warning = FALSE, error = FALSE, eval = FALSE}
+
+
+#Predict on test set
+multiple.predictions = predict(lda.multiple, newdata = test.pca) #Return best predictions for category
+
+confusionMatrix(multiple.predictions,test.pca$track_genres_all) #Confusion Matrix and accuracy
+
+```
+
+The accuracy of the prediction is 0.5519, which means approximately 55% of the predictions are correctly classified. The Kappa value is 0.39, which means the model performs moderately better than when predictions were randomly generated. 
+
+The sensitivity of class 0 ("other genres"), 12 (rock), 15 (electronic) are approximately 0.6. Thus, the true positive rate is moderately well. Pop music, however, has a very low sensitivity, which means pop tracks are not correctly classified as pop for the most part.
+
+The specificity is fairly high, with values being roughly 0.8 and above. This means that the true negative rate is roughly 80% and above for all the genres. 
+
+In sum, the model performs fairly well with high specificity and moderate sensitivity (except for pop). 
+
+
+### Procedure
+
+The first step I took was pre-processing the data. Observing the datasets, I noticed that there are many "sub-genres" under a "parent-genre". In other words, multiple genre ids could map to the hip-hop, pop, rock, and electronic genre ids. Therefore, I decided to iterate through the genre ids of each track, and categorized each track as pop, hiphop, rock, or electronic, if a track contained a genre id that can be mapped to one of them.
+
+In order to do this, I removed the brackets from the genre column, removed white spaces, and split by the commas to obtain a list containing the genre ids. Then, as I looped through the tracks, I checked whether the list contained a genre id that can be mapped to pop, rock, hiphop, or electronic (categorized to "other" otherwise).
+
+Next, I checked whether there are rows that contained empty values in the genre column. Observing the data, rows that did not have data in the genre column had corrupt data. There were also 1626 missing rows, which I decided was not too significant to omit, as the number was comparatively smaller (hiphop had 6657 tracks, and the others had 10,000~30,000 tracks).
+
+Then, I conducted a train-test-split on the data to better evaluate the performance on the model. I constructed a LDA model using all the data and features, and evaluated the importance of the variables using the varImp() function. Observing the plot, "mfcc_median_1" was the most "important" variable in all the genres except for hiphop. Thus, I decided to use "mfcc_median_1" as the feature when constructing a model with only 1 feature. Evaluating its performance on the test data, the model did not perform well. It classified the tracks into either 0 ("other genres") or 12 (rock). Therefore, it fails to classify pop, electronic, and hiphop genres. The Kappa value was also very low, with a value of 0.1639, which means the model performs only slightly better than if it was randomly guessing. The accuracy may appear to be moderate with a value of 0.4, but this value may be deceptive because 6915 are correctly characterized as "other", and the model only predicts "other" and "rock".
+
+Before constructing the model with multiple features, I created a correlation plot to observe the relationship between variables. It revealed that out of the 518 predictor variables 204 are highly correlated. Thus, when constructing the model, it may be beneficial to drop some variables instead of using all the features. Moreover, considering there are 518 predictors, it may be beneficial to reduce the dimensionality of the data. I decided that using PCA may be appropriate since we do not know the meaning of the columns, so losing interpretability of features was not a big issue.
+
+Conducting the PCA analysis, it revealed that roughly 250 principal components explain 95% of the variance. Thus, I decided to use the first 250 principal components. Considering we are using 250 variables, I decided to use LDA instead of QDA, because estimating hundreds of additional variance may be inefficient.
+
+The accuracy of the prediction was 0.5519, which means approximately 55% of the predictions are correctly classified. The Kappa value is 0.39, which means the model performs moderately better than when predictions were randomly generated. 
+
+The sensitivity of class 0 ("other genres"), 12 (rock), 15 (electronic) are approximately 0.6. Thus, the true positive rate is moderately well. Pop music, however, has a very low sensitivity, which means pop tracks are not correctly classified as pop for the most part.
+
+The specificity was fairly high, with values being roughly 0.8 and above. This means that the true negative rate is roughly 80% and above for all the genres. 
+
+In sum, the multiple features model performed fairly okay with high specificity and moderate sensitivity (except for pop). 
+
+
+
+
+
+
+
+
+
