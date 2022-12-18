@@ -19,6 +19,20 @@ Identifying whether a song is Rock, Electronic, Hip-Hop, or Pop from musical fea
 
 Note) `tracks.csv` file size exceeds github upload limit, so only first 100 rows are shown in file uploaded to this repository as a sample.
 
+<br/>
+
+
+**Genre Code Table For This Project:**
+
+|Genre Code|Genre Title|
+|----------|-----------|
+|0|Other|
+|10|Pop|
+|12|Rock|
+|15|Electronic|
+|21|Hip Hop|
+
+<br/>
 
 ### Analysis
 
@@ -33,7 +47,8 @@ The higher level overview of the code is as follows:
 - Use quadratic discriminant analysis using principal components to predict genre
 - Construct confusion matrix to evaluate QDA model
 
-*Single Feature Model*
+<br/>
+
 
 Figure of variable importance.
 
@@ -57,13 +72,15 @@ Therefore, the model performs very poorly since it fails to classify pop, electr
 The Kappa value is also very low, with a value of 0.1639, which means the model performs only slightly better than if it was randomly guessing. 
 The accuracy may appear to be moderate with a value of 0.4, but this value may be deceptive because 6915 are correctly characterized as “other”, and the model only predicts “other” and “rock”.
 
+<br/>
+
 **PCA Plot**
 
 <img src="README_Images/pca_plot.png" width = 600>
 
 Roughly 250 principal components explain 95% of the variability in the data. Thus we use the first 250 principal components to construct the QDA model.
 
-
+<br/>
 
 **QDA Confusion Matrix**
 
@@ -81,6 +98,7 @@ The sensitivity of class 0 (“other genres”), 12 (rock), 15 (electronic) are 
 The specificity is fairly high, with values being roughly 0.8 and above. This means that the true negative rate is roughly 80% and above for all the genres.
 In sum, the model performs fairly well with high specificity and moderate sensitivity (except for pop).
 
+<br/>
 
 ### Files
 
@@ -89,6 +107,7 @@ In sum, the model performs fairly well with high specificity and moderate sensit
 |Data|folder that contains datasets used in this project|
 |music-genre-identification.Rmd|R markdown file that contains code|
 
+<br/>
 
 ### Acknowledgements
 
