@@ -1,0 +1,542 @@
+---
+title: "Lab7Che"
+author: "Che Hoon Jeong"
+date: "2/25/2022"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE, error = FALSE}
+#install.packages(c("mice","caret", "ggplot2", "gridExtra", "kableExtra"), repos = "http://cran.us.r-project.org")
+
+install.packages("withr", repos = "http://cran.us.r-project.org")
+install.packages("mice", repos = "http://cran.us.r-project.org")
+install.packages("caret", repos = "http://cran.us.r-project.org")
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+install.packages("kableExtra", repos = "http://cran.us.r-project.org")
+install.packages("Rcpp", repos = "http://cran.us.r-project.org")
+
+
+library("withr")
+library("caret")
+library("ggplot2")
+library("gridExtra")
+library("mice")
+library("kableExtra")
+library("Rcpp")
+
+
+```
+
+
+We read in the dataframes below
+```{r, warning=FALSE, error = FALSE}
+
+setwd("/Users/CheHoon/Desktop/SP2022/DA350/Lab7")
+
+Data1 <- read.csv("Data1.csv")
+Data2 <- read.csv("Data2.csv")
+Data3 <- read.csv("Data3.csv")
+FullData <- read.csv("FullData.csv")
+TestData <- read.csv("TestData.csv")
+
+
+```
+
+
+
+### Question 1.
+
+```{r, warning=FALSE, error = FALSE}
+
+print(paste("Number of rows with sickness greater than 60: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Total number of rows: ", 
+            nrow(TestData), 
+            sep = ""))
+
+print(paste("Percentage of rows with sickness greater than 60: ", 
+            nrow(TestData[TestData$Sickness > 60,])/nrow(TestData)*100, "%",
+            sep = ""))
+
+```
+
+
+
+Create a simple linear regression model predicting Sickness from Symptoms using the training FullData. Generate the predictions of sickness on the TestData. Use these predictions to predict how many individuals will require hospitalization and treatment. Compare to the true answer from above - how accurate is this prediction? (No need for a confusion matrix here - just simply report the true and predicted number of hospitalizations.)
+
+
+```{r, warning=FALSE, error = FALSE}
+
+lm1 <- lm(Sickness ~ Symptoms,
+             data = FullData)
+
+predict1 <- predict(lm1, newdata = TestData)
+
+
+print(paste("True Number of Hospitalization: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Predicted Number of Hospitalization: ",
+            length(predict1[predict1 > 60]),
+            sep = ""))
+
+
+```
+
+
+### Question 2.
+
+
+```{r, warning=FALSE, error = FALSE}
+
+FullPlot = ggplot(FullData, aes(Symptoms,Sickness))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle('Full Data')+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlim(30,110)+
+  ylim(30,100)
+
+
+Data1Plot = ggplot(Data1, aes(Symptoms,Sickness))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle('Data 1')+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlim(30,110)+
+  ylim(30,100)
+
+
+Data2Plot = ggplot(Data2, aes(Symptoms,Sickness))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle('Data 2')+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlim(30,110)+
+  ylim(30,100)
+
+
+Data3Plot = ggplot(Data3, aes(Symptoms,Sickness))+
+  geom_point()+
+  geom_smooth(method="lm")+
+  ggtitle('Data 3')+
+  theme(plot.title = element_text(hjust = 0.5))+
+  xlim(30,110)+
+  ylim(30,100)
+
+grid.arrange(FullPlot, Data1Plot, Data2Plot, Data3Plot, nrow = 2)
+
+
+```
+
+Data3 (MCAR) : Individuals in the county are randomly tested irregardless of symptoms or sickness.
+
+Data1 (MAR): Individuals with higher symptoms are tested more frequently than individuals with lower symptoms.
+
+Data2 (MNAR): Individuals with known contact with infected individuals are tested more often than those without. This has the effect of testing individuals with high sickness more often.
+
+
+Impact of missing data on prediction on adjacent county (test data):
+
+Data1 (MAR): because most people with high symptoms are in the dataset, the prediction for sickness in the missing data may result in higher values. This is because, generally, people with higher symptoms have higher sickness, so having most of the data with higher symptoms will result in a model that predicts higher sickness. However, the inaccuracy will not be as severe as a dataset with data missing not at random.  
+
+Data2 (MNAR): because individuals with high sickness are tested more often, the prediction of sickness on new data will be higher. Thus, predictions will be very inaccurate, and overpredicted. 
+
+Data3 (MCAR): missing data will reduce the accuracy of the prediction, but will not severely impact as much as the MNAR and MAR data.  
+
+
+
+### Question 3.
+
+We use the three datasets above to construct simple linear regression models, and generate predictions on the test data. We compare the results to the theoretical true result.
+```{r, warning=FALSE, error = FALSE}
+
+
+data1.lm <- lm(Sickness ~ Symptoms,
+             data = Data1)
+
+data2.lm <- lm(Sickness ~ Symptoms,
+             data = Data2)
+
+data3.lm <- lm(Sickness ~ Symptoms,
+             data = Data3)
+
+data1.predict <- predict(data1.lm, newdata = TestData)
+data2.predict <- predict(data2.lm, newdata = TestData)
+data3.predict <- predict(data3.lm, newdata = TestData)
+
+print(paste("True Number of Hospitalization: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Data1(MAR) Predicted Number of Hospitalization: ",
+            length(data1.predict[data1.predict > 60]),
+            sep = ""))
+
+
+print(paste("Data2 (MNAR) Predicted Number of Hospitalization: ",
+            length(data2.predict[data2.predict > 60]),
+            sep = ""))
+
+print(paste("Data3 (MCAR) Predicted Number of Hospitalization: ",
+            length(data3.predict[data3.predict > 60]),
+            sep = ""))
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+lm1
+data1.lm
+data2.lm
+data3.lm
+
+```
+
+
+The true number of hospitalization was 344. However, the MAR data predicted 497, MNAR predicted 879, and MCAR predicted 426. Thus, the datasets with missing data predicted much higher sickness and hospitalization.
+
+Observing the coefficients of the models, the MAR and MNAR models have much higher intercepts with values of 33.25 and 41.95, respectively. These are greater than the intercepts of the full data and MCAR who have values of 26 and 25, respectively. This may be because since MNAR and MAR have majority of their data points with higher sickness, the intercept will be higher when fitting the model.
+
+On the other hand, the MAR and MNAR models' symptoms coefficients are less than the full data and MCAR. This may be because MCAR and the FullData have data ranging from low and high values, thus the linear regression would capture the greater upward slope. However, the MAR and MNAR contain mostly high sickness values, thus the change in slope is expected not to be as high.
+
+
+
+### Question 4.
+
+We perform mean substitution on the above datasets.
+```{r, warning=FALSE, error = FALSE}
+
+mean.sub.data1 <- Data1
+mean.sub.data2 <- Data2
+mean.sub.data3 <- Data3
+
+mean.sub.data1[which(is.na(mean.sub.data1$Sickness)),2] <- mean(mean.sub.data1$Sickness, na.rm = TRUE)
+mean.sub.data2[which(is.na(mean.sub.data2$Sickness)),2] <- mean(mean.sub.data2$Sickness, na.rm = TRUE)
+mean.sub.data3[which(is.na(mean.sub.data3$Sickness)),2] <- mean(mean.sub.data3$Sickness, na.rm = TRUE)
+
+
+```
+
+
+We construct simple linear regression models with the mean substitution dataset we constructed above.
+
+```{r, warning=FALSE, error = FALSE}
+
+mean.sub.data1.lm <- lm(Sickness ~ Symptoms, 
+             data = mean.sub.data1)
+
+mean.sub.data2.lm <- lm(Sickness ~ Symptoms, 
+             data = mean.sub.data2)
+
+mean.sub.data3.lm <- lm(Sickness ~ Symptoms, 
+             data = mean.sub.data3)
+
+mean.sub.data1.predict <- predict(mean.sub.data1.lm, newdata = TestData)
+mean.sub.data2.predict <- predict(mean.sub.data2.lm, newdata = TestData)
+mean.sub.data3.predict <- predict(mean.sub.data3.lm, newdata = TestData)
+
+print(paste("True Number of Hospitalization: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Data1(MAR) Predicted Number of Hospitalization: ",
+            length(mean.sub.data1.predict[mean.sub.data1.predict > 60]),
+            sep = ""))
+
+
+print(paste("Data2(MNAR) Predicted Number of Hospitalization: ",
+            length(mean.sub.data2.predict[mean.sub.data2.predict > 60]),
+            sep = ""))
+
+print(paste("Data3(MCAR) Predicted Number of Hospitalization: ",
+            length(mean.sub.data3.predict[mean.sub.data3.predict > 60]),
+            sep = ""))
+
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+
+mean.sub.data1.lm
+mean.sub.data2.lm
+mean.sub.data3.lm
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+mean(mean.sub.data1$Sickness, na.rm = TRUE)
+mean(mean.sub.data2$Sickness, na.rm = TRUE)
+
+```
+
+
+The mean substitution method performs terribly in the predictions. The MAR and MNAR data predicts that all of the patients will be hospitalized, compared to the true value of 344. This is because the mean sickness of the MAR and MNAR dataset is 68.58 and 71.9, respectively. Thus, when we substitute the missing values with these high mean values, the linear regression will fit such that it predicts high values. 
+
+Observing the coefficients, the MAR and MNAR datasets have intercepts of 64.427 and 63.873, respectively. Moreover, the coefficient of symptoms are positive, with 0.06519 and 0.1259. Thus, all patients will be hospitalized regardless of their symptoms, because the prediction value will always be greater than 60.
+
+
+
+### Question 5.
+We perform regression imputation on the three datasets.
+
+```{r, warning=FALSE, error = FALSE}
+
+reg.impute.data1 <- Data1
+reg.impute.data2 <- Data2
+reg.impute.data3 <- Data3
+
+reg.impute.val1 <- predict(data1.lm, newdata = reg.impute.data1[which(is.na(reg.impute.data1$Sickness)),])
+reg.impute.val2 <- predict(data2.lm, newdata = reg.impute.data2[which(is.na(reg.impute.data2$Sickness)),])
+reg.impute.val3 <- predict(data3.lm, newdata = reg.impute.data3[which(is.na(reg.impute.data3$Sickness)),])
+
+reg.impute.data1[which(is.na(reg.impute.data1$Sickness)),2] <- reg.impute.val1
+reg.impute.data2[which(is.na(reg.impute.data2$Sickness)),2] <- reg.impute.val2
+reg.impute.data3[which(is.na(reg.impute.data3$Sickness)),2] <- reg.impute.val3
+
+```
+
+
+
+We construct simple linear regression models with the regression imputation datasets we constructed above.
+
+```{r, warning=FALSE, error = FALSE}
+
+reg.impute.data1.lm <- lm(Sickness ~ Symptoms, 
+             data = reg.impute.data1)
+
+reg.impute.data2.lm <- lm(Sickness ~ Symptoms, 
+             data = reg.impute.data2)
+
+reg.impute.data3.lm <- lm(Sickness ~ Symptoms, 
+             data = reg.impute.data3)
+
+reg.impute.data1.predict <- predict(reg.impute.data1.lm, newdata = TestData)
+reg.impute.data2.predict <- predict(reg.impute.data2.lm, newdata = TestData)
+reg.impute.data3.predict <- predict(reg.impute.data3.lm, newdata = TestData)
+
+print(paste("True Number of Hospitalization: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Data1(MAR) Predicted Number of Hospitalization: ",
+            length(reg.impute.data1.predict[reg.impute.data1.predict > 60]),
+            sep = ""))
+
+
+print(paste("Data2(MNAR) Predicted Number of Hospitalization: ",
+            length(reg.impute.data2.predict[reg.impute.data2.predict > 60]),
+            sep = ""))
+
+print(paste("Data3(MCAR) Predicted Number of Hospitalization: ",
+            length(reg.impute.data3.predict[reg.impute.data3.predict > 60]),
+            sep = ""))
+
+
+```
+
+We obtain the same prediction as the implicitly list-wise/pair-wise deletion model. This is because, we substituted values based on a linear regression model on the existing data. Therefore, when we create a regression model in the data with the imputed values, it will result in the same linear model. 
+
+However, it is important to note that this will not always be the case. It is equal in this particular project, because we only have one predictor variable, thus resulting in the same model. 
+
+
+### Question 6.
+
+Now we explore multiple imputation.
+
+*Multiple Imputation on Data1 (MAR)*
+
+```{r, warning=FALSE, error = FALSE}
+
+imputedData1 = mice(Data1)
+xyplot(imputedData1, Sickness~Symptoms| .imp,pch=18,cex=1)
+
+
+```
+
+*Multiple Imputation on Data2 (MNAR)*
+
+```{r, warning=FALSE, error = FALSE}
+
+imputedData2 = mice(Data2)
+xyplot(imputedData2, Sickness~Symptoms| .imp,pch=18,cex=1)
+
+```
+
+*Multiple Imputation on Data3 (MCAR)*
+
+```{r, warning=FALSE, error = FALSE}
+
+imputedData3 = mice(Data3)
+xyplot(imputedData3, Sickness~Symptoms| .imp,pch=18,cex=1)
+
+```
+
+
+The plots look reasonable. The MNAR plot have a lot of points concentrated on the higher sickness values. In comparison, the MCAR plot have points fairly scattered throughout. The MAR plot have imputed points roughly around the blue dots. Thus, the plots are fairly reasonable overall. 
+
+
+We move on to the analysis phase
+
+```{r, warning=FALSE, error = FALSE}
+
+imputedModel1 = with(imputedData1, lm(Sickness~Symptoms))
+imputedModel2 = with(imputedData2, lm(Sickness~Symptoms))
+imputedModel3 = with(imputedData3, lm(Sickness~Symptoms))
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+imputedModel1
+```
+
+```{r, warning=FALSE, error = FALSE}
+
+imputedModel2
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+imputedModel3
+```
+
+The intercept and symptoms coefficient are similar for the most part for the multiple imputation of each data. Specifically, the intercept difference is roughly less than 5, and the symptoms coefficient difference is roughly less than 0.06. Therefore, the imputed values are fairly similar. This is reasonable, because the 5 plots for each data are fairly similar.
+
+
+We pool the models above
+
+```{r, warning=FALSE, error = FALSE}
+
+pooled1 = pool(imputedModel1)
+pooled2 = pool(imputedModel2)
+pooled3 = pool(imputedModel3)
+
+
+summary(pooled1)
+summary(pooled2)
+summary(pooled3)
+```
+
+We manually generate the final regression functions based on the summary of the pooled results
+```{r, warning=FALSE, error = FALSE}
+
+pool.data1 <- Data1
+pool.data2 <- Data2
+pool.data3 <- Data3
+
+
+temp1 <- pool.data1[which(is.na(pool.data1$Sickness)),]
+temp1$Sickness <- 31.711199 + temp1$Symptoms * 0.450169
+pool.data1[which(is.na(pool.data1$Sickness)),2] <- temp1$Sickness
+
+
+temp2 <- pool.data2[which(is.na(pool.data2$Sickness)),]
+temp2$Sickness <- 40.4168109 + temp2$Symptoms * 0.4435892
+pool.data2[which(is.na(pool.data2$Sickness)),2] <- temp2$Sickness
+
+
+temp3 <- pool.data3[which(is.na(pool.data3$Sickness)),]
+temp3$Sickness <- 26.1074513 + temp3$Symptoms * 0.5384022
+pool.data3[which(is.na(pool.data3$Sickness)),2] <- temp3$Sickness
+
+
+```
+
+
+
+We construct linear models with the multiple imputation dataset and generate predictions on test data
+```{r,warning=FALSE, error = FALSE}
+
+pool.data1.lm <- lm(Sickness ~ Symptoms, 
+             data = pool.data1)
+
+pool.data2.lm <- lm(Sickness ~ Symptoms, 
+             data = pool.data2)
+
+pool.data3.lm <- lm(Sickness ~ Symptoms, 
+             data = pool.data3)
+
+
+pool.data1.predict <- predict(pool.data1.lm, newdata = TestData)
+pool.data2.predict <- predict(pool.data2.lm, newdata = TestData)
+pool.data3.predict <- predict(pool.data3.lm, newdata = TestData)
+
+
+print(paste("True Number of Hospitalization: ", 
+            nrow(TestData[TestData$Sickness > 60,]), 
+            sep = ""))
+
+
+print(paste("Data1(MAR) Predicted Number of Hospitalization: ",
+            length(pool.data1.predict[pool.data1.predict > 60]),
+            sep = ""))
+
+
+print(paste("Data2(MNAR) Predicted Number of Hospitalization: ",
+            length(pool.data2.predict[pool.data2.predict > 60]),
+            sep = ""))
+
+print(paste("Data3(MCAR) Predicted Number of Hospitalization: ",
+            length(pool.data3.predict[pool.data3.predict > 60]),
+            sep = ""))
+
+
+```
+
+
+```{r,warning=FALSE, error = FALSE}
+
+dt = data.frame(Method=c("Listwise Deletion", "Mean Substitution", "Regression Imputation","Multiple Imputation"),
+                MCAR = c("0.426","0.431","0.426","0.439"),
+                MAR = c("0.497","1","0.497","0.463"),
+                MNAR = c("0.879","1","0.879","0.867"))
+
+
+```
+
+```{r, warning=FALSE, error = FALSE}
+kable(dt)
+```
+
+True: 344.
+Full-Data Regression Prediction: 383
+
+
+### Question 7.
+
+Write a paragraph reflecting on what you have learned about missing data from this lab. Talk about the difference between mechanisms of missingness, predictive estimates relative to the true value, and which missing data methods helped improve estimates.
+
+Mean substitution method performs very poorly for MAR and MNAR datasets. Specifically, for MNAR dataset, values are missing based on the dependent variable itself. In this case, data with lower sickness values were missing. Therefore, the mean sickness value was very high. Similarly, it is expected that patients with high symptoms will have higher sickness. Thus, for the MAR dataset, since most data had high symptoms, the mean sickness value would be high. Thus, substituting the mean value will be problematic, since the regression would fit to data points with high sickness values. As we observed in the lab, this resulted in all the patients being hospitalized. For the MCAR dataset, the mean substitution performed fairly okay. This is because the missing data is not related to Symptoms or Sickness itself, the mean value would not be overly high like the MNAR and MAR dataset. 
+
+The multiple imputation method helped improve the estimates overall. Specifically, the missing dataset models tended to overestimate the hospitalization proportion. However, the multiple imputation improved on such overestimation by generating multiple copies of stochastic imputation and pooling the results.
+
+
+### Question 8.
+
+Considering what you have learned in this lab, what points do you agree with or disagree with? How does missing data affect real world decisions?
+
+I agree with the concerns of the unequal benefits of data and technology. The article stated that people with lower paying jobs are less likely to download the contract tracing app, despite arguably being more at risk of the disease. I agree that this is concerning because our lab revealed the data missing at random may result in inaccurate predictions. Similarly, I agree that open analytics should be the norm for two reasons. First, data should be openly available and easy to share to decrease missing data. For instance, if data from certain areas are not not available, then it will impact the analysis since different regions would experience the pandemic differently (regions vary socioeconomically, politically, etc.). This would cause a MAR dataset, since the different socioeconomic and political factors cause varying impacts of the disease. Secondly, by opening and sharing the data, analysts may conduct their research with varying methods. As observed in the lab, mean substitution, linear regression imputation, and multiple imputation had varying results. Thus, by sharing data, it enables people to analyze the pandemic with different methods and diversify the results.
+In conclusion, missing data affect real world decisions. If policies are based off of models with missing data, it will not be able to impact communities that are not represented by the model. If data is heavily skewed towards individuals in high socioeconomic status (due to their greater access to tracing app, etc.), then models would be more appropriate for those individuals more so than people of low socioeconomic standards.
+
+
+
