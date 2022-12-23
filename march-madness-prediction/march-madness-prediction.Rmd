@@ -1,0 +1,1232 @@
+---
+title: "march madness prediction"
+author: "Che Hoon Jeong"
+date: "3/21/2022"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  word_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, error=FALSE, warning=FALSE}
+#install.packages("dplyr")
+#install.packages("caret")
+#install.packages("rpart.plot")
+library(dplyr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(knitr)
+
+```
+
+### Question 1
+
+As a probability warmup, what is the probability of a perfect bracket for the entire March Madness tournament if someone guesses completely at random? What is Warren Buffet’s expected payout if he offers a billion dollars prize, and all 330 million Americans randomly guess a bracket?
+
+Probability of a perfect bracket at random guessing: 1/(2^(32+16+8+4+2+1)) = 1/(2^63) = 1.0842022e-19
+
+Warren Buffet's payout: 330,000,000 * 1.0842022e-19 * 10^9 = 3.5778672e-2 dollars
+
+
+### Question 2
+
+
+We load the dataset below.
+
+```{r, error=FALSE, warning=FALSE}
+
+#Import data
+setwd('/Users/CheHoon/Desktop/SP2022/DA350/Lab8')
+GameStats = read.csv('MRegularSeasonDetailedResults.csv')
+TourneyResults = read.csv('MNCAATourneyDetailedResults.csv')
+Slots = read.csv('MNCAATourneySlots.csv')
+Seeds = read.csv('MNCAATourneySeeds.csv')
+Teams = read.csv("MTeams.csv")
+
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+#Create summary table of average stats per team per year
+Winners = GameStats[,c(1,3,9:21)]
+colnames(Winners)[2:15] = c("Team","Fgm","Fga","Tpm","Tpa",
+                            "Ftm","Fta","OR","DR","Ast",
+                            "TO","St","Bl","PF")
+Winners$Win = 1
+
+Losers = GameStats[,c(1,5,22:34)]
+colnames(Losers)[2:15] = c("Team","Fgm","Fga","Tpm","Tpa",
+                           "Ftm","Fta","OR","DR","Ast",
+                           "TO","St","Bl","PF")
+Losers$Win = 0
+
+FullGame = rbind(Winners,Losers)
+rm(Winners,Losers)
+
+```
+
+
+We will use the difference between each team’s average stats for that year as the predictors of each game winner, so we do this with:
+
+```{r, error=FALSE, warning=FALSE}
+
+AnnualSummaries = FullGame %>%
+                    group_by(Season, Team) %>%
+                    summarise(WinPct = mean(Win), 
+                              Fgm = mean(Fgm), Fga = mean(Fga),
+                              Tpm = mean(Tpm), Tpa = mean(Tpa),
+                              Ftm = mean(Ftm), Fta = mean(Fta),
+                              OR = mean(OR), DR = mean(DR),
+                              Ast = mean(Ast), TO = mean(TO),
+                              St = mean(St), Bl = mean(Bl), 
+                              PF = mean(PF))
+
+```
+
+
+We then tie these annual summaries with the tournament outcomes:
+
+```{r, error=FALSE, warning=FALSE}
+
+#Construct Training Data merging games played with stats above
+TrainingResults = filter(TourneyResults, Season <= 2017)
+WinningTraining = as.data.frame(matrix(0, ncol = 31, nrow = nrow(TrainingResults)))
+WinningTraining[,1:3] = TrainingResults[,c(1,3,5)]
+
+for (i in 1:nrow(TrainingResults)){
+  WinningTraining[i,4:17] =
+    AnnualSummaries[which(AnnualSummaries$Season==TrainingResults[i,"Season"] 
+                     &AnnualSummaries$Team ==TrainingResults[i,"WTeamID"]),3:16]
+  
+  WinningTraining[i,18:31] =
+    AnnualSummaries[which(AnnualSummaries$Season==TrainingResults[i,"Season"] 
+                     &AnnualSummaries$Team ==TrainingResults[i,"LTeamID"]),3:16]
+}
+
+colnames(WinningTraining)[1:3] = 
+  c("Season","Team1","Team2")
+
+colnames(WinningTraining)[4:17] = 
+  c("T1WinPct","T1Fgm","T1Fga","T1Tpm","T1Tpa","T1Ftm",
+    "T1Fta","T1OR","T1DR","T1Ast","T1TO","T1St","T1Bl","T1PF")
+
+colnames(WinningTraining)[18:31] = 
+  c("T2WinPct","T2Fgm","T2Fga","T2Tpm","T2Tpa","T2Ftm",
+    "T2Fta","T2OR","T2DR","T2Ast","T2TO","T2St","T2Bl","T2PF")
+
+WinningTraining$Win = 1
+
+#=====================================
+
+#Now use a similar logic as above, changing indices as necessary, to create 
+#a dataframe 'LoseTraining' with the losing team of each game as Team 1.
+
+
+LoseTraining = as.data.frame(matrix(0, ncol = 31, nrow = nrow(TrainingResults)))
+LoseTraining[,1:3] = TrainingResults[,c(1,5,3)]
+
+for (i in 1:nrow(TrainingResults)){
+  LoseTraining[i,4:17] =
+    AnnualSummaries[which(AnnualSummaries$Season==TrainingResults[i,"Season"] 
+                     &AnnualSummaries$Team ==TrainingResults[i,"LTeamID"]),3:16]
+  
+  LoseTraining[i,18:31] =
+    AnnualSummaries[which(AnnualSummaries$Season==TrainingResults[i,"Season"] 
+                     &AnnualSummaries$Team ==TrainingResults[i,"WTeamID"]),3:16]
+}
+
+
+colnames(LoseTraining)[1:3] = 
+  c("Season","Team1","Team2")
+
+colnames(LoseTraining)[4:17] = 
+  c("T1WinPct","T1Fgm","T1Fga","T1Tpm","T1Tpa","T1Ftm",
+    "T1Fta","T1OR","T1DR","T1Ast","T1TO","T1St","T1Bl","T1PF")
+
+colnames(LoseTraining)[18:31] = 
+  c("T2WinPct","T2Fgm","T2Fga","T2Tpm","T2Tpa","T2Ftm",
+    "T2Fta","T2OR","T2DR","T2Ast","T2TO","T2St","T2Bl","T2PF")
+
+LoseTraining$Win = 0
+
+#====================================
+
+Merged = rbind(WinningTraining,LoseTraining)
+
+TrainingData = Merged[,4:17] - Merged[,18:31]
+TrainingData[,15] = Merged[,32]
+
+colnames(TrainingData)[1:15] = 
+  c("WinPct","Fgm","Fga","Tpm","Tpa","Ftm","Fta","OR","DR","Ast","TO","St","Bl","PF","Win")
+
+```
+
+
+### Question 3
+
+For a baseline model to compare against, we create a logistic regression model using repeated 10-fold cross validation to predict which team wins based on both team’s stats.
+
+```{r, error=FALSE, warning=FALSE}
+
+TrainingDataCopy <- TrainingData
+TrainingDataCopy$Win <- as.factor(TrainingDataCopy$Win)
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+#logistic regression
+
+trctrl = trainControl(method = "repeatedcv", number = 10, repeats = 1)
+
+#Logistic Regression with 10 fold cross validation
+logreg = train(Win ~ ., data = TrainingDataCopy, method="glm" , family = "binomial",trControl=trctrl)
+
+```
+
+```{r, error=FALSE, warning=FALSE}
+
+logreg
+
+```
+
+The accuracy is approximately 67.73%, which is performing fairly since more than half of the games are predicted correctly.
+
+
+### Question 4
+
+We build a simple decision tree. Plot the final decision tree and give an intuitive explanation of what the plots tell you about the predictor variables. Use the complexity parameter that gives the best accuracy for the remainder of this lab. Why is using accuracy acceptable in this context, unlike many of the times we have problems with it in class? Report the parameters of best fit and the resulting accuracy.
+
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+#Fit a single full decision tree:
+tuneGrid = expand.grid(cp=0.00)
+ctrl = trainControl(method="repeatedcv",number=10,repeats=3)
+
+#Train decision tree:
+dtree_fit = train(Win ~ ., 
+                  data = TrainingDataCopy, 
+                  method = "rpart",
+                  metric = "Accuracy",
+                  tuneGrid = tuneGrid,
+                  trControl = ctrl)
+
+#Visualize:
+prp(dtree_fit$finalModel, cex = 0.5)
+
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+
+#Consider different choices for complexity parameter:
+dtree_fit_pruning = train(Win ~ ., 
+                          data = TrainingDataCopy, 
+                          method = "rpart",
+                          tuneLength = 20,
+                          trControl = ctrl)
+
+dtree_fit_pruning #Display performance for different complexity parameters
+plot(dtree_fit_pruning) #Plot performance against complexity parameters
+
+#Visualize tree with optimal pruning:
+prp(dtree_fit_pruning$finalModel)
+
+```
+
+cp that maximizes accuracy is: 0.01373464
+
+The resulting accuracy is 0.6162324
+
+Why is using accuracy acceptable in this context, unlike many of the times we have problems with it in class? Report the parameters of best fit and the resulting accuracy.
+
+Because in a basketball game we are predicting whether a team should win or lose, therefore we can just use the accuracy.
+
+
+
+### Question 5
+
+We create Random Forest Model below.
+
+```{r, error=FALSE, warning=FALSE}
+
+#setting seed for reproducibility
+set.seed(1)
+
+#Random forests:
+trctrl = trainControl(method = "oob")
+tunegrid <- expand.grid(.mtry = (1:15))
+
+
+random_forest_model = train(Win ~ ., 
+                            data = TrainingDataCopy, 
+                            method = "rf",
+                            trControl = trctrl,
+                            metric = "Accuracy",
+                            tuneGrid = tunegrid,
+                            ntree = 250,
+                            importance = TRUE)
+
+
+# random_forest_pred = predict(random_forest_model,test)
+# sqrt(mean((random_forest_pred-test$salary)^2)) #RMSE for random forest
+
+
+
+```
+
+
+We plot the accuracy of the random forest as a function of the parameter mtry.
+
+```{r, error=FALSE, warning=FALSE}
+
+#plot(random_forest_model$results$mtry,random_forest_model$results$RMSE)
+plot(random_forest_model)
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+random_forest_model
+
+```
+
+For the model that produces the highest accuracy, the mtry is 3, in which the accuracy is 0.6401631
+
+
+### Question 6.
+
+We generate the predictions and actual winners of each game in the tournament below.
+
+The code looks for the team id in each bracket "slot" and obtain the corresponding team's data from the AnnualSummaries dataframe. Then, it uses that data to generate a prediction through the model that is passed in into the function. There are many lines of code, because the March Madness tournament has several rounds. In other words, the predicted winner of the first round would advance to the second round. Thus, the data of predicted winning teams of the first round would be used to generate predictions for the winners of the second round (this process repeates for all the rounds).
+
+```{r, error=FALSE, warning=FALSE}
+
+PredictWinners = function(thisModel,Year){
+
+mycolnames = c("Season","Team1","Team2","WinPct","Fgm","Fga","Tpm","Tpa","Ftm","Fta","OR","DR","Ast","TO","St","Bl","PF")
+
+TheseSlots = filter(Slots,Season==Year)
+TheseSeeds = filter(Seeds,Season==Year)
+
+TheseSlots$Prediction = 0 #Initiate to store predictions
+
+#Round 1
+Round1Games = as.data.frame(matrix(0, ncol = 17, nrow = 32))
+colnames(Round1Games) = mycolnames
+Round1Games$Season = Year
+
+for (i in 1:32){
+  Round1Games[i,"Team1"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$StrongSeed[i])),3]
+  
+  Round1Games[i,"Team2"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$WeakSeed[i])),3]
+  
+  Round1Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 1
+pred = predict(thisModel, Round1Games)
+Round1Pred = data.frame(Slot = Slots[1:32,"Slot"],PredictedWinner = 0)
+for (i in 1:32){
+  if (pred[i] == 1){
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team1"]
+  }
+  else{
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[1:32] = Round1Pred[,"PredictedWinner"]
+
+
+
+## Round 2
+#Use the predicted classes to construct round 2
+Round2Games = as.data.frame(matrix(0, ncol = 17, nrow = 16))
+colnames(Round2Games) = mycolnames
+Round2Games$Season = Year
+
+for (i in 1:16){
+  Round2Games[i,"Team1"] = 
+    Round1Pred[which(Round1Pred$Slot==as.character(TheseSlots$StrongSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,"Team2"] = 
+    Round1Pred[which(Round1Pred$Slot == as.character(TheseSlots$WeakSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round2Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                       & AnnualSummaries$Team ==Round2Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 2
+pred = predict(thisModel, Round2Games)
+Round2Pred = data.frame(Slot = Slots[33:48,"Slot"],PredictedWinner = 0)
+for (i in 1:16){
+  if (pred[i] == 1){
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team1"]
+  }
+  else{
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[33:48] = Round2Pred[,"PredictedWinner"]
+
+
+
+## Round 3
+Round3Games = as.data.frame(matrix(0, ncol = 17, nrow = 8))
+colnames(Round3Games) = mycolnames
+Round3Games$Season = Year
+
+for (i in 1:8){
+  Round3Games[i,"Team1"] = 
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$StrongSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,"Team2"] =
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$WeakSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 3
+pred = predict(thisModel, Round3Games)
+Round3Pred = data.frame(Slot = Slots[49:56,"Slot"],PredictedWinner = 0)
+for (i in 1:8){
+  if (pred[i] == 1){
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team1"]
+  }
+  else{
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[49:56] = Round3Pred[,"PredictedWinner"]
+
+
+## Round 4
+Round4Games = as.data.frame(matrix(0, ncol = 17, nrow = 4))
+colnames(Round4Games) = mycolnames
+Round4Games$Season = Year
+
+for (i in 1:4){
+  Round4Games[i,"Team1"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$StrongSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,"Team2"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$WeakSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 4
+pred = predict(thisModel, Round4Games)
+Round4Pred = data.frame(Slot = Slots[57:60,"Slot"],PredictedWinner = 0)
+for (i in 1:4){
+  if (pred[i] == 1){
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team1"]
+  }
+  else{
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[57:60] = Round4Pred[,"PredictedWinner"]
+
+
+## Round 5
+Round5Games = as.data.frame(matrix(0, ncol = 17, nrow = 2))
+colnames(Round5Games) = mycolnames
+Round5Games$Season = Year
+
+for (i in 1:2){
+  Round5Games[i,"Team1"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$StrongSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,"Team2"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$WeakSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 5
+pred = predict(thisModel, Round5Games)
+Round5Pred = data.frame(Slot = Slots[61:62,"Slot"],PredictedWinner = 0)
+for (i in 1:2){
+  if (pred[i] == 1){
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team1"]
+  }
+  else{
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[61:62] = Round5Pred[,"PredictedWinner"]
+
+
+## Round 6
+Round6Games = as.data.frame(matrix(0, ncol = 17, nrow = 1))
+colnames(Round6Games) = mycolnames
+Round6Games$Season = Year
+
+for (i in 1:1){
+  Round6Games[i,"Team1"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$StrongSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,"Team2"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$WeakSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 6
+pred = predict(thisModel, Round4Games)
+Round6Pred = data.frame(Slot = Slots[63,"Slot"],PredictedWinner = 0)
+for (i in 1:1){
+  if (pred[i] == 1){
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team1"]
+  }
+  else{
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[63] = Round6Pred[,"PredictedWinner"]
+
+TheseResults = filter(TourneyResults, Season==Year)
+ TheseSlots$Actual = 0
+
+for (i in 1:63){
+  TheseSlots[i,"Actual"] = TheseResults[which(as.character(TheseSlots[i,"Slot"])==TheseResults$Slot),"WTeamID"]
+}
+
+Rounds = 0
+for (i in 1:32){
+  Rounds[i] = 1
+}
+for (i in 33:48){
+  Rounds[i] = 2
+}
+for (i in 49:56){
+  Rounds[i] = 3
+}
+for (i in 57:60){
+  Rounds[i] = 4
+}
+for (i in 61:62){
+  Rounds[i] = 5
+}
+for (i in 63){
+  Rounds[i] = 6
+}
+
+Results = data.frame(Round = Rounds, Predicted = TheseSlots$Prediction, Winner = TheseSlots$Actual)
+
+return(Results)
+}
+
+```
+
+
+### Question 7
+
+We use the function above to generate predictions for each of 2018, 2019, and 2021, using the final best fit models we created above in steps 3,4, and 5.
+
+```{r, error=FALSE, warning=FALSE}
+
+
+set.seed(1)
+
+predict2018_log <- PredictWinners(logreg, 2018)
+predict2019_log <- PredictWinners(logreg, 2019)
+predict2021_log <- PredictWinners(logreg, 2021)
+
+
+predict2018_dt <- PredictWinners(dtree_fit_pruning, 2018)
+predict2019_dt <- PredictWinners(dtree_fit_pruning, 2019)
+predict2021_dt <- PredictWinners(dtree_fit_pruning, 2021)
+
+
+predict2018_rf <- PredictWinners(random_forest_model, 2018)
+predict2019_rf <- PredictWinners(random_forest_model, 2019)
+predict2021_rf <- PredictWinners(random_forest_model, 2021)
+
+```
+
+
+
+### Question 8
+
+A typical scoring system for March Madness brackets gives 1 point for round 1 successful predictions, 2 points for round 2 successful predictions, 4 points for round 3, 8 points for round 4, 16 points for round 5, and 32 points for round 6. Calculate the expectation of how many points would be made in a bracket that flips a fair coin to make each prediction, this will be our random baseline.
+
+
+(1/2)(1)(32) + (1/2)(2)(16) + (1/2)(4)(8) + (1/2)(8)(4) + (1/2)(16)(2) + (1/2)(32)(1)
+= 16 + 12 + 16 + 16 + 16 + 16 = 96 points
+
+
+### Question 9
+
+
+We create a function to calculate the scores
+
+```{r, error=FALSE, warning=FALSE}
+
+scoreCounter <- function(results){
+  
+  points <- 0
+  
+  for(i in 1:63){
+    
+      if(results[i,'Predicted'] == results[i,'Winner']){
+        points = points + 2^(results[i,'Round']-1)
+      }
+
+  }
+  
+  return(points)
+  
+}
+
+
+```
+
+We generate the scores for each of the models in each year.
+
+```{r, error=FALSE, warning=FALSE}
+
+Comparison = data.frame(matrix(ncol = 5, nrow = 3))
+colnames(Comparison) = c('Year','Random Choices','Logistic','Decision Tree','Random Forest')
+
+
+Comparison[1,1] = 2018
+Comparison[1,2] = 96
+Comparison[1,3] = scoreCounter(predict2018_log)
+Comparison[1,4] = scoreCounter(predict2018_dt)
+Comparison[1,5] = scoreCounter(predict2018_rf)
+
+Comparison[2,1] = 2019
+Comparison[2,2] = 96
+Comparison[2,3] = scoreCounter(predict2019_log)
+Comparison[2,4] = scoreCounter(predict2019_dt)
+Comparison[2,5] = scoreCounter(predict2019_rf)
+  
+Comparison[3,1] = 2021
+Comparison[3,2] = 96
+Comparison[3,3] = scoreCounter(predict2021_log)
+Comparison[3,4] = scoreCounter(predict2021_dt)
+Comparison[3,5] = scoreCounter(predict2021_rf)
+  
+kable(Comparison)
+
+
+```
+
+Which method appears to be working the best? The NCAA reports the average bracket score was 57 points. How do your results compare to these averages?
+
+The Random Forest model seems to work the best, which scored the highest in 2018 and 2021. The points were 119 points and 80 points for 2018 and 2021, respectively, which are both much higher than the average bracket point of 57 points.
+
+
+### Question 10. 
+
+
+```{r, error=FALSE, warning=FALSE}
+
+PredictWinnersProb = function(thisModel,Year){
+
+mycolnames = c("Season","Team1","Team2","WinPct","Fgm","Fga","Tpm","Tpa","Ftm","Fta","OR","DR","Ast","TO","St","Bl","PF")
+
+TheseSlots = filter(Slots,Season==Year)
+TheseSeeds = filter(Seeds,Season==Year)
+
+TheseSlots$Prediction = 0 #Initiate to store predictions
+
+#Round 1
+Round1Games = as.data.frame(matrix(0, ncol = 17, nrow = 32))
+colnames(Round1Games) = mycolnames
+Round1Games$Season = Year
+
+for (i in 1:32){
+  Round1Games[i,"Team1"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$StrongSeed[i])),3]
+  
+  Round1Games[i,"Team2"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$WeakSeed[i])),3]
+  
+  Round1Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 1
+pred = predict(thisModel, Round1Games, type = "prob")
+Round1Pred = data.frame(Slot = Slots[1:32,"Slot"],PredictedWinner = 0)
+for (i in 1:32){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team1"]
+  }
+  else{
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[1:32] = Round1Pred[,"PredictedWinner"]
+
+
+
+## Round 2
+#Use the predicted classes to construct round 2
+Round2Games = as.data.frame(matrix(0, ncol = 17, nrow = 16))
+colnames(Round2Games) = mycolnames
+Round2Games$Season = Year
+
+for (i in 1:16){
+  Round2Games[i,"Team1"] = 
+    Round1Pred[which(Round1Pred$Slot==as.character(TheseSlots$StrongSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,"Team2"] = 
+    Round1Pred[which(Round1Pred$Slot == as.character(TheseSlots$WeakSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round2Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                       & AnnualSummaries$Team ==Round2Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 2
+pred = predict(thisModel, Round2Games, type = "prob")
+Round2Pred = data.frame(Slot = Slots[33:48,"Slot"],PredictedWinner = 0)
+for (i in 1:16){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team1"]
+  }
+  else{
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[33:48] = Round2Pred[,"PredictedWinner"]
+
+
+
+## Round 3
+Round3Games = as.data.frame(matrix(0, ncol = 17, nrow = 8))
+colnames(Round3Games) = mycolnames
+Round3Games$Season = Year
+
+for (i in 1:8){
+  Round3Games[i,"Team1"] = 
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$StrongSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,"Team2"] =
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$WeakSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 3
+pred = predict(thisModel, Round3Games, type = "prob")
+Round3Pred = data.frame(Slot = Slots[49:56,"Slot"],PredictedWinner = 0)
+for (i in 1:8){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team1"]
+  }
+  else{
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[49:56] = Round3Pred[,"PredictedWinner"]
+
+
+## Round 4
+Round4Games = as.data.frame(matrix(0, ncol = 17, nrow = 4))
+colnames(Round4Games) = mycolnames
+Round4Games$Season = Year
+
+for (i in 1:4){
+  Round4Games[i,"Team1"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$StrongSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,"Team2"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$WeakSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 4
+pred = predict(thisModel, Round4Games, type="prob")
+Round4Pred = data.frame(Slot = Slots[57:60,"Slot"],PredictedWinner = 0)
+for (i in 1:4){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team1"]
+  }
+  else{
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[57:60] = Round4Pred[,"PredictedWinner"]
+
+
+## Round 5
+Round5Games = as.data.frame(matrix(0, ncol = 17, nrow = 2))
+colnames(Round5Games) = mycolnames
+Round5Games$Season = Year
+
+for (i in 1:2){
+  Round5Games[i,"Team1"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$StrongSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,"Team2"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$WeakSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 5
+pred = predict(thisModel, Round5Games, type="prob")
+Round5Pred = data.frame(Slot = Slots[61:62,"Slot"],PredictedWinner = 0)
+for (i in 1:2){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team1"]
+  }
+  else{
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[61:62] = Round5Pred[,"PredictedWinner"]
+
+
+## Round 6
+Round6Games = as.data.frame(matrix(0, ncol = 17, nrow = 1))
+colnames(Round6Games) = mycolnames
+Round6Games$Season = Year
+
+for (i in 1:1){
+  Round6Games[i,"Team1"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$StrongSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,"Team2"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$WeakSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 6
+pred = predict(thisModel, Round4Games, type="prob")
+Round6Pred = data.frame(Slot = Slots[63,"Slot"],PredictedWinner = 0)
+for (i in 1:1){
+  
+  probVal <- runif(1)
+  
+  if (pred[i,2] > probVal){
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team1"]
+  }
+  else{
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[63] = Round6Pred[,"PredictedWinner"]
+
+TheseResults = filter(TourneyResults, Season==Year)
+ TheseSlots$Actual = 0
+
+for (i in 1:63){
+  TheseSlots[i,"Actual"] = TheseResults[which(as.character(TheseSlots[i,"Slot"])==TheseResults$Slot),"WTeamID"]
+}
+
+Rounds = 0
+for (i in 1:32){
+  Rounds[i] = 1
+}
+for (i in 33:48){
+  Rounds[i] = 2
+}
+for (i in 49:56){
+  Rounds[i] = 3
+}
+for (i in 57:60){
+  Rounds[i] = 4
+}
+for (i in 61:62){
+  Rounds[i] = 5
+}
+for (i in 63){
+  Rounds[i] = 6
+}
+
+Results = data.frame(Round = Rounds, Predicted = TheseSlots$Prediction, Winner = TheseSlots$Actual)
+
+return(Results)
+}
+
+```
+
+
+We calculate and store 1000 scores of the probability approach below
+```{r, error=FALSE, warning=FALSE}
+
+pointsList <- c()
+
+for(i in 1:1000){
+
+  predict2021_rf_prob <- PredictWinnersProb(random_forest_model$finalModel, 2021)
+  points <- scoreCounter(predict2021_rf_prob)
+  pointsList <- append(pointsList,points)
+}
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+pointsDf <- data.frame(matrix(ncol = 0, nrow = 1000))
+pointsDf$points = pointsList
+
+hist(pointsDf$points)
+
+```
+
+It is better to follow a deterministic model, since it results in much higher points - 80, whereas the probability model frequently scores between 30 and 70
+
+
+### Question 11
+
+We use our model to predict march madness 2022.
+
+
+We create a new PredictWinners without the results part. 
+```{r, error=FALSE, warning=FALSE}
+
+PredictWinnersNoResult = function(thisModel,Year){
+
+mycolnames = c("Season","Team1","Team2","WinPct","Fgm","Fga","Tpm","Tpa","Ftm","Fta","OR","DR","Ast","TO","St","Bl","PF")
+
+TheseSlots = filter(Slots,Season==Year)
+TheseSeeds = filter(Seeds,Season==Year)
+
+TheseSlots$Prediction = 0 #Initiate to store predictions
+
+#Round 1
+Round1Games = as.data.frame(matrix(0, ncol = 17, nrow = 32))
+colnames(Round1Games) = mycolnames
+Round1Games$Season = Year
+
+for (i in 1:32){
+  Round1Games[i,"Team1"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$StrongSeed[i])),3]
+  
+  Round1Games[i,"Team2"] = 
+    TheseSeeds[which(TheseSeeds$Seed == as.character(TheseSlots$WeakSeed[i])),3]
+  
+  Round1Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round1Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round1Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 1
+pred = predict(thisModel, Round1Games)
+Round1Pred = data.frame(Slot = Slots[1:32,"Slot"],PredictedWinner = 0)
+for (i in 1:32){
+  if (pred[i] == 1){
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team1"]
+  }
+  else{
+    Round1Pred[i,"PredictedWinner"] = Round1Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[1:32] = Round1Pred[,"PredictedWinner"]
+
+
+
+## Round 2
+#Use the predicted classes to construct round 2
+Round2Games = as.data.frame(matrix(0, ncol = 17, nrow = 16))
+colnames(Round2Games) = mycolnames
+Round2Games$Season = Year
+
+for (i in 1:16){
+  Round2Games[i,"Team1"] = 
+    Round1Pred[which(Round1Pred$Slot==as.character(TheseSlots$StrongSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,"Team2"] = 
+    Round1Pred[which(Round1Pred$Slot == as.character(TheseSlots$WeakSeed[i+32])),"PredictedWinner"]
+  
+  Round2Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round2Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round2Games[i,"Season"] 
+                       & AnnualSummaries$Team ==Round2Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 2
+pred = predict(thisModel, Round2Games)
+Round2Pred = data.frame(Slot = Slots[33:48,"Slot"],PredictedWinner = 0)
+for (i in 1:16){
+  if (pred[i] == 1){
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team1"]
+  }
+  else{
+    Round2Pred[i,"PredictedWinner"] = Round2Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[33:48] = Round2Pred[,"PredictedWinner"]
+
+
+
+## Round 3
+Round3Games = as.data.frame(matrix(0, ncol = 17, nrow = 8))
+colnames(Round3Games) = mycolnames
+Round3Games$Season = Year
+
+for (i in 1:8){
+  Round3Games[i,"Team1"] = 
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$StrongSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,"Team2"] =
+    Round2Pred[which(Round2Pred$Slot==as.character(TheseSlots$WeakSeed[i+48])),"PredictedWinner"]
+  
+  Round3Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round3Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round3Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 3
+pred = predict(thisModel, Round3Games)
+Round3Pred = data.frame(Slot = Slots[49:56,"Slot"],PredictedWinner = 0)
+for (i in 1:8){
+  if (pred[i] == 1){
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team1"]
+  }
+  else{
+    Round3Pred[i,"PredictedWinner"] = Round3Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[49:56] = Round3Pred[,"PredictedWinner"]
+
+
+## Round 4
+Round4Games = as.data.frame(matrix(0, ncol = 17, nrow = 4))
+colnames(Round4Games) = mycolnames
+Round4Games$Season = Year
+
+for (i in 1:4){
+  Round4Games[i,"Team1"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$StrongSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,"Team2"] = 
+    Round3Pred[which(Round3Pred$Slot==as.character(TheseSlots$WeakSeed[i+56])),"PredictedWinner"]
+  
+  Round4Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 4
+pred = predict(thisModel, Round4Games)
+Round4Pred = data.frame(Slot = Slots[57:60,"Slot"],PredictedWinner = 0)
+for (i in 1:4){
+  if (pred[i] == 1){
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team1"]
+  }
+  else{
+    Round4Pred[i,"PredictedWinner"] = Round4Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[57:60] = Round4Pred[,"PredictedWinner"]
+
+
+## Round 5
+Round5Games = as.data.frame(matrix(0, ncol = 17, nrow = 2))
+colnames(Round5Games) = mycolnames
+Round5Games$Season = Year
+
+for (i in 1:2){
+  Round5Games[i,"Team1"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$StrongSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,"Team2"] = 
+    Round4Pred[which(Round4Pred$Slot==as.character(TheseSlots$WeakSeed[i+60])),"PredictedWinner"]
+  
+  Round5Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round4Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round4Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 5
+pred = predict(thisModel, Round5Games)
+Round5Pred = data.frame(Slot = Slots[61:62,"Slot"],PredictedWinner = 0)
+for (i in 1:2){
+  if (pred[i] == 1){
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team1"]
+  }
+  else{
+    Round5Pred[i,"PredictedWinner"] = Round5Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[61:62] = Round5Pred[,"PredictedWinner"]
+
+
+## Round 6
+Round6Games = as.data.frame(matrix(0, ncol = 17, nrow = 1))
+colnames(Round6Games) = mycolnames
+Round6Games$Season = Year
+
+for (i in 1:1){
+  Round6Games[i,"Team1"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$StrongSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,"Team2"] = 
+    Round5Pred[which(Round5Pred$Slot==as.character(TheseSlots$WeakSeed[i+62])),"PredictedWinner"]
+  
+  Round6Games[i,4:17] = 
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team1"]),3:16]-
+    AnnualSummaries[which(AnnualSummaries$Season==Round6Games[i,"Season"] 
+                        & AnnualSummaries$Team ==Round6Games[i,"Team2"]),3:16]
+}
+
+#Create predictions on round 6
+pred = predict(thisModel, Round4Games)
+Round6Pred = data.frame(Slot = Slots[63,"Slot"],PredictedWinner = 0)
+for (i in 1:1){
+  if (pred[i] == 1){
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team1"]
+  }
+  else{
+    Round6Pred[i,"PredictedWinner"] = Round6Games[i,"Team2"]
+  }
+}
+TheseSlots$Prediction[63] = Round6Pred[,"PredictedWinner"]
+
+
+Rounds = 0
+for (i in 1:32){
+  Rounds[i] = 1
+}
+for (i in 33:48){
+  Rounds[i] = 2
+}
+for (i in 49:56){
+  Rounds[i] = 3
+}
+for (i in 57:60){
+  Rounds[i] = 4
+}
+for (i in 61:62){
+  Rounds[i] = 5
+}
+for (i in 63){
+  Rounds[i] = 6
+}
+
+Results = data.frame(Round = Rounds, Predicted = TheseSlots$Prediction)
+
+return(Results)
+}
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+predict2022_rf <- PredictWinnersNoResult(random_forest_model$finalModel, 2022)
+
+predict2022_rf$team <- "team"
+
+for(i in 1:nrow(predict2022_rf)){
+  
+  predict2022_rf[i,'Predicted'] 
+  predict2022_rf[i,'team'] = Teams[which(Teams$TeamID == predict2022_rf[i,'Predicted']),'TeamName']
+  
+}
+
+predict2022_rf
+
+```
+
+
+
+
+
+
