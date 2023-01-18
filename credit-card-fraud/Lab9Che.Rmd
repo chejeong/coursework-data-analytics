@@ -1,0 +1,1552 @@
+---
+title: "Lab9Che"
+author: "Che Hoon Jeong"
+date: "4/01/2022"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We load necessary packages below
+```{r}
+
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(ROSE)
+library(smotefamily)
+library(dplyr)
+
+```
+
+
+### Question 1
+
+Note) valid transaction : 0, fraudulent transaction: 1.
+
+We read in the credit card data below
+```{r, error=FALSE, warning=FALSE}
+
+setwd("/Users/CheHoon/Desktop/SP2022/DA350/Lab9")
+creditcard <- read.csv("creditcard.csv")
+
+```
+
+We scale the predictors below
+```{r, error=FALSE, warning=FALSE}
+
+#keeping original
+creditcardOriginal <- creditcard
+
+for(i in 1:29){
+  
+  creditcard[[colnames(creditcard)[i]]] <- (creditcard[[colnames(creditcard)[i]]] - mean(creditcard[[colnames(creditcard)[i]]]))/sd(creditcard[[colnames(creditcard)[i]]])
+  
+}
+
+```
+
+We examine the "Fraud" column below.
+
+```{r, error=FALSE, warning=FALSE}
+
+summary(creditcard$Fraud)
+
+print(paste("Number of valid transactions:", length(which(creditcard$Fraud == 0)), sep = " "))
+print(paste("Number of fraudulent transactions:", length(which(creditcard$Fraud == 1)), sep = " "))
+
+
+```
+
+We observe that there are 284,315 valid transactions and 492 fraudulent transactions
+
+
+### Question 2
+
+We investigate predictor variables that have a much different distribution in valid and fraudulent usage below. 
+
+```{r, error=FALSE, warning=FALSE}
+
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V1)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V2)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V3)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V4)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V5)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V6)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V7)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V8)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V9)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V10)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V11)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V12)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+# p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V13)) + 
+#   geom_boxplot() + ylim(-20,20)
+# p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V14)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+# p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V15)) + 
+#   geom_boxplot() + ylim(-20,20)
+# p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V16)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V17)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+p <- ggplot(creditcard, aes(x=as.factor(Fraud), y=V18)) + 
+  geom_boxplot() + ylim(-20,20)
+p
+
+
+```
+
+```{r, error=FALSE, warning=FALSE}
+
+fraudulent <- creditcard %>% filter(Fraud == 1)
+valid <- creditcard %>% filter(Fraud == 0)
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+# hist(fraudulent$V1)
+# hist(valid$V1)
+
+plot(density(fraudulent$V1), xlim=c(-5, 5), ylim=c(0,1))
+lines(density(fraudulent$V2), col = "red")
+lines(density(fraudulent$V3), col = "green")
+lines(density(fraudulent$V4), col = "blue")
+lines(density(fraudulent$V5), col = "yellow")
+lines(density(fraudulent$V6), col = "orange")
+  
+legend("topleft", c("V1", "V2", "V3", "V4", "V5"),
+       col =c("black","red","green", "blue", "yellow", "orange"), lty=1)
+
+
+plot(density(valid$V1),xlim=c(-5, 5), , ylim=c(0,1))
+lines(density(valid$V2), col = "red")
+lines(density(valid$V3), col = "green")
+lines(density(valid$V4), col = "blue")
+lines(density(valid$V5), col = "yellow")
+lines(density(valid$V6), col = "orange")
+  
+legend("topleft", c("V1", "V2", "V3", "V4", "V5"),
+       col =c("black","red","green", "blue", "yellow", "orange"), lty=1)
+
+```
+
+
+From the boxplots, we observe that the difference between fraudulent and valid transactions are not so clear. It appears as if the boxplots of fraudulent and valid transactions share similar means and distribution, with a few exceptions. The density plot shows that valid transactions usually fall in the range of -2 and 2, whereas invalid transactions share a more spread out distribution.
+
+
+### Question 3
+
+
+We set the seed to 1 and split the data 70/30 into training and test sets.
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+part = createDataPartition(creditcard$Fraud, p = 0.7, list=FALSE)
+train = creditcard[part,]
+test = creditcard[-part,]
+
+```
+
+We load the keras package.
+
+```{r, error=FALSE, warning=FALSE}
+
+library(tensorflow)
+library(keras)
+
+```
+
+We train a neural network on the training ndata with 1 hidden layer with 5 nodes and linear activation functions. As this is a classification task, you must use sigmoid activation functions in the output layer. As in the class code, use binary crossentropy loss - this attempts to create the best predicted probabilities and accuracy metric. This shouldn’t take longer than 30 seconds or so.
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+#==========BUILD NN===========
+
+# Input layer (29 variables)
+# One hidden layer (5 nodes, linear activation function)
+# Output layer (sigmoid activation function for specifying a classification problem)
+KSmodel <- keras_model_sequential() %>%  #Initiates model, no need to change
+  layer_flatten(input_shape = c(29)) %>%  # Layer flatten specifies the input layer. 29 predictors 
+  layer_dense(units = 5, activation = "linear") %>%
+  layer_dense(units = 1, activation = "sigmoid") #Last layer is always treated as output layer
+
+summary(KSmodel)
+
+#==========TRAIN NN===========
+
+# Defines what loss function to use, optimization algorithm to use, and performance metrics to display
+# For classification problems, no need to change any of these parameters
+# For regression problems, change loss and metric
+KSmodel %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+#Performs the work and trains the model.  X and Y have to be cast as matrices
+#Epochs refers to how many times we pass over the data - increase until you don't see further improvement.  5 is sufficient here
+#Validation split tells it how much of the data to hold back for validation set - 0.3 is good
+#Verbose = 2 tells it to show progress as it is training.
+KSmodel %>% 
+  fit(
+    x = as.matrix(train[,-c(30)]), y = train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+
+```
+
+We observe the estimated performance - the accuracy is 0.999
+
+We generate the valid / fraudulent predictions on the training data with a cutoff Δ=0.5 and use the confusionMatrix function to compare the predictions to the true outcomes below.
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+#See coefficients
+KSmodel$weights
+
+#Predict new project
+train_predictions <- KSmodel %>% 
+  predict(as.matrix(train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(train$Fraud), positive = '1') #Create confusion matrix
+
+
+```
+
+The accuracy is 0.9989. The confusion matrix shows that 198980 transactions are correctly identified as valid, and 164 are correctly identified as fraudulent. In addition, 181 are falsely identified as valid, and 40 are falsely identified as fraudulent.
+
+
+### Question 4
+
+We consider four methods for balancing our data: upsampling, downsampling, ROSE, and SMOTE below.
+
+```{r, error=FALSE, warning=FALSE}
+
+#downsample
+down_train = downSample(x = train[,-ncol(train)], y = as.factor(train[,ncol(train)]))
+
+#upsample
+
+up_train = upSample(x = train[,-ncol(train)], y = as.factor(train[,ncol(train)]))
+
+#ROSE
+rose_train = ROSE(Fraud ~ ., data  = train)$data
+
+#SMOTE
+smote_train = SMOTE(train[,1:29], train$Fraud)$data
+
+
+```
+
+
+Look at the number of fraudlent and valid transactions in each data set. Do they line up with what we learned from class?
+
+```{r, error=FALSE, warning=FALSE}
+
+print(paste("Number of Fraudulent Transactions in Train Data: ", 
+            length(which(train$Fraud == 1)), sep = " "))
+
+print(paste("Number of Valid Transaction in Train Data: ",
+            length(which(train$Fraud == 0)), sep = " "))
+
+print(paste("Number of Fraudulent Transactions in Downtraining Sample: ",
+            length(which(down_train$Class == 0)), sep = " "))
+
+print(paste("Number of Valid Transactions in Downtraining Sample: ",
+            length(which(down_train$Class == 1)), sep = " "))
+
+
+print(paste("Number of Fraudulent Transactions in Uptraining Sample: ",
+            length(which(up_train$Class == 1)), sep = " "))
+
+print(paste("Number of Valid Transactions in Uptraining Sample: ",
+            length(which(up_train$Class == 0)), sep = " "))
+
+
+print(paste("Number of Fraudulent Transactions in ROSE Sample: ",
+            length(which(rose_train$Fraud == 1)), sep = " "))
+
+
+print(paste("Number of Valid Transactions in ROSE Sample: ",
+            length(which(rose_train$Fraud == 0)), sep = " "))
+
+
+print(paste("Number of Fraudulent Transactions in SMOTE Sample: ",
+            length(which(smote_train$class == 1)), sep = " "))
+
+
+print(paste("Number of Valid Transactions in SMOTE Sample: ",
+            length(which(smote_train$class == 0)), sep = " "))
+
+
+```
+
+The number of fraudulent and valid transactions in each dataset is as expected.
+
+For downscaling, we randomly sample rows from the more prevalent class to match the number of rows of the less prevalent class. Since the train data has 345 fraudulent transactions, we expect the valid transaction to decrease from 199020 to 345, which is shown above. 
+
+For upscaling, we repeat rows from the less prevalent class to match the number of rows of the more prevalent class. Since the train data has 199020 valid transactions, we expect the fraudulent transaction to increase from 345 to 199020, which is shown above.
+
+For SMOTE and ROSE sampling, sophisticated machine learning techniques are utilized to create fictitious data in the less prevalent class that is similar to observed real data. As shown above, the number of fraudulent samples are increased, which is as expected. 
+
+
+We now experiment with different parameters for training the neural network: number of hidden layers, number of nodes in each layer, activation functions of each layer, the predictors used, and each of the 4 balanced training sets of data.
+
+
+We first experiment with the number of hidden layers. We try 3 and 5 hidden layers. We keep other parameters the same as before.
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+#=============three hidden layers=============
+
+threehiddenlayers <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 5, activation = "linear") %>%
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+threehiddenlayers %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+threehiddenlayers %>% 
+  fit(
+    x = as.matrix(train[,-c(30)]), y = train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+
+#Predict new project
+train_predictions_3hl <- threehiddenlayers %>% 
+  predict(as.matrix(train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_3hl = ifelse(train_predictions_3hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_3hl),as.factor(train$Fraud), positive = '1') #Create confusion matrix
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("three hidden layers, downsampling")
+
+down_train$Class <- as.character(down_train$Class)
+down_train$Class <- as.integer(down_train$Class)
+
+threehiddenlayers %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_3hl <- threehiddenlayers %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_3hl = ifelse(train_predictions_3hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_3hl),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("three hidden layers, upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+threehiddenlayers %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_3hl <- threehiddenlayers %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_3hl = ifelse(train_predictions_3hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_3hl),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("three hidden layers, ROSE sampling")
+
+
+threehiddenlayers %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_3hl <- threehiddenlayers %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_3hl = ifelse(train_predictions_3hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_3hl),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("three hidden layers, SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+threehiddenlayers %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_3hl <- threehiddenlayers %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_3hl = ifelse(train_predictions_3hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_3hl),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+
+```
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+#=============five hidden layers=============
+
+fivehiddenlayers <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 5, activation = "linear") %>%
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units= 5, activation = "linear") %>%
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+fivehiddenlayers %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+fivehiddenlayers %>% 
+  fit(
+    x = as.matrix(train[,-c(30)]), y = train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+
+#Predict new project
+train_predictions_5hl <- fivehiddenlayers %>% 
+  predict(as.matrix(train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_5hl = ifelse(train_predictions_5hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_5hl),as.factor(train$Fraud), positive = '1') #Create confusion matrix
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("five hidden layers, downsampling")
+
+
+fivehiddenlayers %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_5hl <- fivehiddenlayers %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_5hl = ifelse(train_predictions_5hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_5hl),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("five hidden layers, upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+fivehiddenlayers %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_5hl <- fivehiddenlayers %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_5hl = ifelse(train_predictions_5hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_5hl),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("five hidden layers, ROSE sampling")
+
+
+fivehiddenlayers %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_5hl <- fivehiddenlayers %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_5hl = ifelse(train_predictions_5hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_5hl),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("five hidden layers, SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+fivehiddenlayers %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions_5hl <- fivehiddenlayers %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_5hl = ifelse(train_predictions_5hl >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_5hl),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+
+```
+
+We experiment with the number of nodes in each layer with three layers.
+
+```{r, error=FALSE, warning=FALSE}
+
+print("Experimenting with nodes: 7 5 3 1")
+
+set.seed(1)
+
+model <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 7, activation = "linear") %>%
+  layer_dense(units= 5, activation = "linear") %>% 
+  layer_dense(units= 3, activation = "linear") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+model %>% 
+  fit(
+    x = as.matrix(train[,-c(30)]), y = train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted_model = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted_model),as.factor(train$Fraud), positive = '1') #Create confusion matrix
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("downsampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+model %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+model %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+```
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+model <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 19, activation = "linear") %>%
+  layer_dense(units= 14, activation = "linear") %>% 
+  layer_dense(units= 7, activation = "linear") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("downsampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+model %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+model %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+
+
+
+
+```
+
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+model <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 19, activation = "linear") %>%
+  layer_dense(units= 19, activation = "linear") %>% 
+  layer_dense(units= 19, activation = "linear") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("downsampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+model %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+model %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+```
+
+
+We now experiment with the type of activation function.
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+model <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 19, activation = "linear") %>%
+  layer_dense(units= 14, activation = "softmax") %>% 
+  layer_dense(units= 7, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("downsampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+model %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+model %>% 
+  fit(
+    x = as.matrix(smote_train[,-c(30)]), 
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+
+
+
+```
+
+```{r, error=FALSE, warning=FALSE}
+
+set.seed(1)
+
+model <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 19, activation = "tanh") %>%
+  layer_dense(units= 14, activation = "softmax") %>% 
+  layer_dense(units= 7, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+
+#=============downsampling===================
+
+set.seed(1)
+
+print("downsampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(down_train[,-c(30)]), 
+    y = down_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(down_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(down_train$Class), positive = '1') #Create confusion matrix
+
+#=============upsampling===================
+
+set.seed(1)
+
+print("upsampling")
+
+up_train$Class <- as.character(up_train$Class)
+up_train$Class <- as.integer(up_train$Class)
+
+model %>% 
+  fit(
+    x = as.matrix(up_train[,-c(30)]), 
+    y = up_train[,"Class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(up_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(up_train$Class), positive = '1') #Create confusion matrix
+
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+model %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>% 
+  predict(as.matrix(rose_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(rose_train$Fraud), positive = '1') #Create confusion matrix
+
+
+
+#=============SMOTE Sampling===================
+
+set.seed(1)
+
+print("SMOTE sampling")
+
+smote_train$class <- as.numeric(smote_train$class)
+
+
+model %>%
+  fit(
+    x = as.matrix(smote_train[,-c(30)]),
+    y = smote_train[,"class"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+train_predictions <- model %>%
+  predict(as.matrix(smote_train[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(train_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(smote_train$class), positive = '1') #Create confusion matrix
+
+
+```
+
+The process of deciding the final model is as follows. The number of hidden layers was increased to 5 from 3, to observe if it creates significant increase in model performance. However, it did not result in a significant increase in accuracy or kappa value, so 3 hidden layers was chosen. The number of nodes in each hidden layer was then explored. The number of nodes in each layer was gradually increased to observe its effect. Specifically, from 5-5-5, the hidden layers combination explored were 7-5-3, 19-14-7, and 19-19-19. Although increasing the number of nodes generally increased performance, increasing to 19-19-19 did not improve the model, so 19-14-7 was chosen. Then the activation function was explored, in which the combination of linear-softmax-relu was used, which showed an improvement from the three linear layers. Then, the tanh-softmax-relu combination showed a slight increase, so it was used as the combination for the final model. Comparing the types of dataset, the modified dataset outperformed the unmodified dataset. Specifically, downscaling performed really well when experimenting with the 7-5-3-1 layer combination, and and 5 layers combination. However, the ROSE sampling performed most consistently well throughout the experimentation, so it was chosen for the final model.
+
+
+
+### Question 5
+
+We use our final model to generate valid / fraudulent predictions on the (imbalanced) test set.
+
+
+We train the final model below
+
+```{r, error=FALSE, warning=FALSE, eval=FALSE}
+
+set.seed(1)
+
+finalmodel <- keras_model_sequential() %>% 
+  layer_flatten(input_shape = c(29)) %>%
+  layer_dense(units = 19, activation = "tanh") %>%
+  layer_dense(units= 14, activation = "softmax") %>% 
+  layer_dense(units= 7, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+finalmodel %>% 
+  compile(
+    loss = "binary_crossentropy",
+    optimizer = "adam",
+    metrics = "accuracy")
+
+
+#=============ROSE Sampling===================
+
+set.seed(1)
+
+print("ROSE sampling")
+
+
+finalmodel %>% 
+  fit(
+    x = as.matrix(rose_train[,-c(30)]), 
+    y = rose_train[,"Fraud"],
+    epochs = 5,
+    validation_split = 0.3,
+    verbose = 2
+  )
+
+#Predict new project
+test_predictions <- finalmodel %>% 
+  predict(as.matrix(test[,-c(30)]))
+
+#Confusion Matrix
+delta = 0.50
+predicted = ifelse(test_predictions >= delta,1,0) #Class prediction
+confusionMatrix(as.factor(predicted),as.factor(test$Fraud), positive = '1') #Create confusion matrix
+
+
+```
+The accuracy is 0.9992, and the Kappa value is 0.7668. It means that 99.92% of the transactions' outcomes are predicted accurately, and that the final model performs much better than when guessing at random (moderately similar to perfect model). 
+
+The sensitivity is 0.795918, and the specificity is 0.999519. In other words, given that the transaction is fraudulent, we predict the transaction correctly as fraudulent 79.5918 percent of the time (true positive rate). Moreover, given that the transaction is valid, we correctly predict it as valid 99.9519 percent of the time (true negative rate)
+
+
+### Question 6
+
+Assuming we are working for a major national bank, we may estimate the cost of false positive and false negative as follows. Because if we falsely identify a transaction as fraudulent, it may result in customer dissatisfaction and additional processing fees. This may not be a high cost. In the case of false negative, it means a fraudulent transaction went through. Thus, we can assume that the loss is the average transaction amount of fraudulent transactions, because it is the amount lost. 
+
+
+We now build a loss function. For the loss associated with a false negative, we use the average transaction amount of fraudulent transactions in the training set. For the loss associated with a false positive, you may assume 5 dollars is the loss attributable to customer irritation and server and communication fees.
+
+We generate the probability predictions below
+
+```{r, error=FALSE, warning=FALSE, eval=FALSE}
+
+#Predict new project
+train_predictions_prob <- finalmodel %>% 
+  predict(as.matrix(train[,-c(30)]), type = "prob")
+
+```
+
+
+```{r, error=FALSE, warning=FALSE, eval=FALSE}
+
+fraud_probability = train_predictions_prob[,1]
+
+cutoff = seq(min(fraud_probability),max(fraud_probability),.001)
+cutoff <- cutoff[1:1000]
+performance = setNames(data.frame(matrix(ncol = 8, nrow = length(cutoff))), c("Cutoff","TN", "FN", "TP", "FP", "Sensitivity", "Specificity","Accuracy"))
+performance$Cutoff = cutoff
+
+
+```
+
+
+```{r, warning=FALSE, eval=FALSE}
+
+for (i in 1:length(cutoff)){
+  temp = table(fraud_probability > performance$Cutoff[i], train$Fraud)
+  TN = temp[1,1]
+  FN = temp[1,2]
+  FP = temp[2,1]
+  TP = temp[2,2]
+  performance$TN[i] = TN
+  performance$TP[i] = TP
+  performance$FN[i] = FN
+  performance$FP[i] = FP
+  performance$Sensitivity[i] = TP/(FN+TP)
+  performance$Specificity[i] = TN/(TN+FP)
+  performance$Accuracy[i] = (TP+TN)/(FP+FN+TP+TN)
+}
+
+```
+
+
+
+```{r, error=FALSE, warning=FALSE, eval=FALSE}
+
+#we filter fraudulent rows from unscaled training dataset
+trainOriginal = creditcardOriginal[part,]
+fraudulentOriginal <- trainOriginal %>% filter(Fraud == 1) %>% select(Amount)
+
+LossFP = 5
+LossFN = mean(fraudulentOriginal$Amount)
+performance$Loss = performance$FP*LossFP + performance$FN*LossFN
+
+
+performance[which.min(performance$Loss),] #Best cutoff
+
+```
+
+we determine that 0.9520256	is the optimal cutoff.
+
+
+### Question 7
+
+We use this cutoff to predict the test dataset
+
+```{r, error=FALSE, warning=FALSE, eval=FALSE}
+
+set.seed(1)
+
+#Predict new project
+test_predictions_prob <- finalmodel %>% 
+  predict(as.matrix(test[,-c(30)]), type = "prob")
+
+
+fraud_probability_test = test_predictions_prob[,1]
+
+performance_test = setNames(data.frame(matrix(ncol = 8, nrow = 1)), c("Cutoff","TN", "FN", "TP", "FP", "Sensitivity", "Specificity","Accuracy"))
+performance_test$Cutoff = 0.9520256
+
+temp = table(fraud_probability_test > 0.9520256 , test$Fraud)
+
+temp
+
+```
+
+
+**a. Per one million transactions, how many fraudulent transactions do we detect and stop before they go through?**
+
+(25+116)/(85270 + 31 + 25 + 116) =  141/85442 = 0.001650242
+
+0.001650242 * 1,000,000 = 1650.242
+
+we detect roughly 1650 transactions per one million transactions (including false positives)
+
+For only true positives, (116)/(85270 + 31 + 25 + 116) = 0.001357646
+0.001357646 * 1,000,000 = 1357.646
+we detect roughly 1358 true fraudulent transactions per one million transactions.
+
+
+**b. If we process twenty million transactions in a year, how much money do we lose to undetected fraudulent transactions per month?**
+
+(31)/(85270 + 31 + 25 + 116) = 31/85442 = 0.0003628192
+0.0003628192 * 20,000,000 = 7256.384
+7256.384 * 123.1334 (mean fraud amount) = 893503.2
+893503.2 / 12 = 74458.6
+roughly 74458.6 dollars a month
+
+
+**c. Per one million transactions, how many customers have their transactions unnecessarily put on hold for a confirmation?**
+
+(25)/(85270 + 31 + 25 + 116) = 25/85442 = 0.0002925961
+
+0.0002925961 * 1,000,000 = 292.5961
+
+roughly 293 transactions are put on hold for a confirmation per one million transactions.
+
+**d. How statistically confident are you in your answers to these questions?**
+
+The accuracy of the predictions is: (85270 + 116) / (85269 + 116 + 31 + 26) = 85386/85442 = 0.9993446
+Moreover, considering the accuracy in the training data was also roughly 0.99, the predictions are considered fairly accurate.
+
+
+
+
+
+
+
+
