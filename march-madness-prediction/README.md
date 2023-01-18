@@ -44,7 +44,14 @@ The higher level overview of the code is as follows:
 <br/>
 
 
-<img src="README_Images/image.png" width = 600>
+<img src="README_Images/model_comparison.png" width = 600>
+
+The Random Forest model seems to work the best, which scored the highest in 2018 and 2021. The points were 119 points and 80 points for 2018 and 2021, respectively, which are both much higher than the average bracket point of 57 points.
+
+
+<br/>
+
+Predictions of the 2022 season can be obtained through the markdown file provided.
 
 
 ### Acknowledgements
