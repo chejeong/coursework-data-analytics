@@ -2,8 +2,11 @@
 
 ### Overview
 
-This project predicts the NCAA Division 1 Basketball March Madness using the Random Forest algorithm.
+This project predicts the NCAA Division 1 Basketball March Madness tournament using the Random Forest algorithm.
 
+The 2003 - 2017 seasons will be used as training sets, 2018-2021 seasons (except 2020 covid break) for the testing set, and the 2022 season will be used to test the machine learning model. Details of the data are described below.
+
+<br/>
 
 ### Data
 
@@ -18,24 +21,6 @@ This project predicts the NCAA Division 1 Basketball March Madness using the Ran
 
 <br/>
 
-
-
-### Analysis
-
-The higher level overview of the code is as follows:
-
-- 
-
-<br/>
-
-
-
-
-<img src="README_Images/image.png" width = 600>
-
-
-<br/>
-
 ### Files
 
 |File Name|Description|
@@ -44,6 +29,23 @@ The higher level overview of the code is as follows:
 |march-madness.Rmd|R markdown file that contains code|
 
 <br/>
+
+### Analysis
+
+The higher level overview of the code is as follows:
+
+- Find each team's average stats for each season, which will be used as predictors in our model
+- Join average stat data with tournament outcome data
+- Build a logsitic regression model for use as basline model for comparison
+- Build a Decision Tree model and evaluate its performance
+- Build a Random Forest model and evaluate its performance
+- Score the prediction of Random Forest Model using the March Madness Bracket scoring system.
+
+<br/>
+
+
+<img src="README_Images/image.png" width = 600>
+
 
 ### Acknowledgements
 
